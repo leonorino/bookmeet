@@ -1,0 +1,15 @@
+services:
+  server:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_PATH: /data/meeting-booking.sqlite
+    volumes:
+      - meeting-booking-data:/data
+    restart: unless-stopped
+
+volumes:
+  meeting-booking-data:

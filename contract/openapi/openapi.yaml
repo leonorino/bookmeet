@@ -1,0 +1,921 @@
+openapi: 3.1.0
+info:
+  title: Meeting Slot Booking API
+  description: Draft API contract. Organizer operations require authentication, but the mechanism is TBD; no authentication scheme is defined yet.
+  version: 0.0.0
+tags: []
+paths:
+  /health:
+    get:
+      operationId: health
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/organizers/{organizerId}/bookings:
+    get:
+      operationId: listOrganizerBookings
+      description: Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerBookingsResponse'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerAccessDenied'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/organizers/{organizerId}/bookings/{bookingId}/cancellation:
+    post:
+      operationId: cancelBookingAsOrganizer
+      description: Organizer-only operation. Cancels a confirmed booking, subject to the 24-hour cutoff. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerCancellationResponse'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerAccessDenied'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '422':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationTooLate'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/organizers/{organizerId}/slots:
+    post:
+      operationId: createOrganizerSlot
+      description: Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerAccessDenied'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSlotRequest'
+    get:
+      operationId: listOrganizerSlots
+      description: Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotsResponse'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerAccessDenied'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/organizers/{organizerId}/slots/{slotId}:
+    delete:
+      operationId: removeOrganizerSlot
+      description: Organizer-only operation. Removes an unbooked slot. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 'There is no content to send for this request, but the headers may be useful. '
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerAccessDenied'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/public/bookings/{bookingId}/cancellation:
+    post:
+      operationId: cancelBookingAsClient
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ClientCancellationRequest'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationResponse'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '422':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationTooLate'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/public/holds/{holdId}/confirmation:
+    post:
+      operationId: confirmHold
+      parameters:
+        - name: holdId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '410':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldExpired'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmBookingRequest'
+  /v1/public/organizers/{organizerId}/availability:
+    get:
+      operationId: getPublicAvailability
+      description: Returns only currently available slots. Held, booked, and withdrawn slots are excluded. When a hold expires, its slot becomes eligible for availability again.
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityResponse'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+  /v1/public/organizers/{organizerId}/holds:
+    post:
+      operationId: createHold
+      parameters:
+        - name: organizerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceNotFound'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHoldRequest'
+components:
+  parameters:
+    ClientCancellationRequest:
+      name: X-Cancellation-Credential
+      in: header
+      required: true
+      description: A booking can be cancelled only when at least 24 hours remain before its start.
+      schema:
+        type: string
+  schemas:
+    AvailabilityResponse:
+      type: object
+      required:
+        - organizerId
+        - slots
+      properties:
+        organizerId:
+          type: string
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/Slot'
+    BookingDetails:
+      type: object
+      required:
+        - bookingId
+        - organizerId
+        - slot
+        - clientEmail
+        - cancellationCredential
+        - status
+        - createdAt
+      properties:
+        bookingId:
+          type: string
+        organizerId:
+          type: string
+        slot:
+          $ref: '#/components/schemas/Slot'
+        clientEmail:
+          $ref: '#/components/schemas/ClientEmail'
+        cancellationCredential:
+          type: string
+          description: Secret needed by the unauthenticated client cancellation operation.
+        status:
+          type: string
+          enum:
+            - confirmed
+            - cancelled
+        createdAt:
+          $ref: '#/components/schemas/UtcInstant'
+    BookingResponse:
+      type: object
+      required:
+        - booking
+      properties:
+        booking:
+          $ref: '#/components/schemas/BookingDetails'
+    CancellationResponse:
+      type: object
+      required:
+        - booking
+      properties:
+        booking:
+          $ref: '#/components/schemas/BookingDetails'
+    CancellationTooLate:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - CANCELLATION_WINDOW_CLOSED
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    ClientEmail:
+      type: string
+      minLength: 3
+      maxLength: 254
+      format: email
+    ConfirmBookingRequest:
+      type: object
+      required:
+        - holdCredential
+        - clientEmail
+      properties:
+        holdCredential:
+          type: string
+          description: Secret returned when the hold was created, proving possession of the hold.
+        clientEmail:
+          $ref: '#/components/schemas/ClientEmail'
+    CreateHoldRequest:
+      type: object
+      required:
+        - slotId
+      properties:
+        slotId:
+          type: string
+    CreateSlotRequest:
+      type: object
+      required:
+        - startAt
+        - endAt
+        - timeZone
+      properties:
+        startAt:
+          $ref: '#/components/schemas/UtcInstant'
+          description: Start instant in UTC.
+        endAt:
+          $ref: '#/components/schemas/UtcInstant'
+          description: End instant in UTC; must be after startAt.
+        timeZone:
+          type: string
+          description: IANA time-zone identifier used to display the slot.
+    ErrorDetail:
+      type: object
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    Hold:
+      type: object
+      required:
+        - holdId
+        - holdCredential
+        - slot
+        - expiresAt
+      properties:
+        holdId:
+          type: string
+        holdCredential:
+          type: string
+          description: Secret credential required to confirm this hold; disclose only to the holding client.
+        slot:
+          $ref: '#/components/schemas/Slot'
+        expiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+          description: Hold expiry instant; the hold lasts 60 seconds after creation.
+    HoldExpired:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - HOLD_EXPIRED
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    HoldResponse:
+      type: object
+      required:
+        - hold
+      properties:
+        hold:
+          $ref: '#/components/schemas/Hold'
+    InternalError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - INTERNAL_ERROR
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    InvalidRequest:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_REQUEST
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    OrganizerAccessDenied:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - ORGANIZER_ACCESS_DENIED
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    OrganizerBookingDetails:
+      type: object
+      required:
+        - bookingId
+        - organizerId
+        - slot
+        - clientEmail
+        - status
+        - createdAt
+      properties:
+        bookingId:
+          type: string
+        organizerId:
+          type: string
+        slot:
+          $ref: '#/components/schemas/Slot'
+        clientEmail:
+          $ref: '#/components/schemas/ClientEmail'
+        status:
+          type: string
+          enum:
+            - confirmed
+            - cancelled
+        createdAt:
+          $ref: '#/components/schemas/UtcInstant'
+      description: Organizer view of a booking; never exposes the client's cancellation credential.
+    OrganizerBookingsResponse:
+      type: object
+      required:
+        - bookings
+      properties:
+        bookings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizerBookingDetails'
+    OrganizerCancellationResponse:
+      type: object
+      required:
+        - booking
+      properties:
+        booking:
+          $ref: '#/components/schemas/OrganizerBookingDetails'
+    OrganizerSlot:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum:
+            - available
+            - held
+            - booked
+        holdExpiresAt:
+          $ref: '#/components/schemas/UtcInstant'
+      allOf:
+        - $ref: '#/components/schemas/Slot'
+      description: Organizer listing includes non-available slot states to distinguish reservations and holds.
+    ResourceNotFound:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - ORGANIZER_NOT_FOUND
+                - SLOT_NOT_FOUND
+                - HOLD_NOT_FOUND
+                - BOOKING_NOT_FOUND
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    Slot:
+      type: object
+      required:
+        - slotId
+        - startAt
+        - endAt
+        - timeZone
+      properties:
+        slotId:
+          type: string
+        startAt:
+          $ref: '#/components/schemas/UtcInstant'
+          description: Start instant, encoded as an RFC 3339 date-time in UTC.
+        endAt:
+          $ref: '#/components/schemas/UtcInstant'
+          description: End instant, encoded as an RFC 3339 date-time in UTC.
+        timeZone:
+          type: string
+          description: Organizer's IANA time-zone identifier, for example Europe/Paris.
+    SlotResponse:
+      type: object
+      required:
+        - slot
+      properties:
+        slot:
+          $ref: '#/components/schemas/Slot'
+    SlotsResponse:
+      type: object
+      required:
+        - slots
+      properties:
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizerSlot'
+    StateConflict:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - SLOT_UNAVAILABLE
+                - SLOT_ALREADY_BOOKED
+                - BOOKING_ALREADY_CANCELLED
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    Unauthenticated:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - UNAUTHENTICATED
+                - HOLD_CREDENTIAL_INVALID
+                - CANCELLATION_CREDENTIAL_INVALID
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
+    UtcInstant:
+      type: string
+      format: date-time
+servers:
+  - url: https://api.example.com
+    description: Draft API server
+    variables: {}

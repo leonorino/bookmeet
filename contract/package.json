@@ -1,0 +1,12 @@
+{
+  "name": "meeting-slot-booking-contract",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone TypeSpec source and OpenAPI contract for Meeting Slot Booking",
+  "scripts": { "compile": "tsp compile ." },
+  "devDependencies": {
+    "@typespec/compiler": "^1.12.0",
+    "@typespec/http": "^1.12.0",
+    "@typespec/openapi3": "^1.12.0"
+  }
+}

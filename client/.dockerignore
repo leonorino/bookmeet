@@ -1,0 +1,5 @@
+node_modules
+build
+.git
+.react-router
+npm-debug.log
