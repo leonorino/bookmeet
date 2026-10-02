@@ -35,6 +35,13 @@ Thumbs.db
 # Local AI assistant configuration
 .agents/
 .codex/
+# Version the project hooks, but keep personal Codex settings and agents local.
+!.codex/
+.codex/*
+!.codex/hooks.json
+!.codex/hooks/
+.codex/hooks/*
+!.codex/hooks/*.mjs
 .claude/
 .cursor/
 .continue/

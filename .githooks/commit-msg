@@ -1,0 +1,61 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 1 ] || [ ! -r "$1" ]; then
+  printf '%s\n' 'commit-msg hook: expected a readable commit message file.' >&2
+  exit 1
+fi
+
+message_file=$1
+header_line=$(awk '!/^#/ && /[^[:space:]]/ { print NR ":" $0; exit }' "$message_file")
+if [ -z "$header_line" ]; then
+  printf '%s\n' 'Invalid commit message: add a Conventional Commits header.' >&2
+  exit 1
+fi
+
+header_line_number=${header_line%%:*}
+header=${header_line#*:}
+header_pattern='^[a-z][a-z0-9-]*(\([^()[:space:]]+\))?!?: [^[:space:]].*$'
+
+if ! printf '%s\n' "$header" | grep -Eq "$header_pattern"; then
+  cat >&2 <<'EOF'
+Invalid commit message. Use Conventional Commits 1.0.0:
+  <type>[optional scope][!]: <description>
+
+Examples:
+  feat(server): add slot reservations
+  fix(client)!: change booking response handling
+
+Types must be lowercase. See https://www.conventionalcommits.org/en/v1.0.0/.
+EOF
+  exit 1
+fi
+
+if grep -Eq '^BREAKING CHANGE:[[:space:]]*$' "$message_file"; then
+  printf '%s\n' 'Invalid commit message: BREAKING CHANGE: needs a description.' >&2
+  exit 1
+fi
+
+if ! awk -v header_line_number="$header_line_number" '
+  NR <= header_line_number || /^#/ { next }
+  {
+    if ($0 ~ /[^[:space:]]/) {
+      is_footer = ($0 ~ /^[[:alnum:]][[:alnum:]-]*(: | #)/ || $0 ~ /^BREAKING CHANGE: /)
+      if ((!saw_content || (is_footer && !saw_footer)) && !previous_blank) {
+        exit 1
+      }
+      if (is_footer) {
+        saw_footer = 1
+      }
+      saw_content = 1
+      previous_blank = 0
+    } else {
+      previous_blank = 1
+    }
+  }
+' "$message_file"; then
+  printf '%s\n' 'Invalid commit message: separate the header, body, and footer with blank lines.' >&2
+  exit 1
+fi
+
+exit 0

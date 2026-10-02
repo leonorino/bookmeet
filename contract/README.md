@@ -1,6 +1,6 @@
 # Meeting Slot Booking API contract
 
-**Status: Draft.** This TypeSpec project is the source of truth for the cross-repository API contract. The checked-in OpenAPI 3.1 document is generated output; do not edit it by hand. The contract describes intended API behavior, not an implementation guarantee.
+**Status: Draft.** This TypeSpec project is the source of truth for the API contract between the client and server packages in this repository. The checked-in OpenAPI 3.1 document is generated output; do not edit it by hand. The contract describes intended API behavior, not an implementation guarantee.
 
 ## Organizer authorization is unresolved
 
