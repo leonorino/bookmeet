@@ -43,6 +43,17 @@ npm run compile
 
 Each package README has its own development and Docker details. The contract README explains how its OpenAPI output is generated.
 
+## CI and Docker images
+
+GitHub Actions runs the available checks for the client (`typecheck` and `build`), server (`typecheck` and `build`), and contract (`compile`, including a check that generated OpenAPI has no uncommitted changes). Each package is installed and checked independently with Node.js 24. The packages do not define test scripts yet.
+
+Checks and Docker builds run for pull requests and manual workflow runs. Pushes to `main` and tags matching `v*` also publish these images to GitHub Container Registry (GHCR):
+
+- `ghcr.io/<owner>/meeting-booking-client`
+- `ghcr.io/<owner>/meeting-booking-server`
+
+Published images receive a full commit SHA tag (`sha-<commit>`); use the same SHA tag for a client/server pair from one commit. Pushes to `main` publish the `main` branch tag and `latest`. Version tags such as `v1.2.3` publish `1.2.3` and `1.2`. Pull requests and manual runs build images without publishing them.
+
 ## Product notes
 
 The intended booking flow includes a one-minute hold, protection against double-booking, explicit time zones, and confirmation and cancellation emails. Time zones are included because apparently the same meeting can happen at several different local times, depending on where you stand.
