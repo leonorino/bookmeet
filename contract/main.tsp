@@ -31,11 +31,17 @@ model Unauthenticated { @statusCode statusCode: 401; error: ApiError<"UNAUTHENTI
 model OrganizerAccessDenied { @statusCode statusCode: 403; error: ApiError<"ORGANIZER_ACCESS_DENIED">; }
 model ResourceNotFound { @statusCode statusCode: 404; error: ApiError<"ORGANIZER_NOT_FOUND" | "SLOT_NOT_FOUND" | "HOLD_NOT_FOUND" | "BOOKING_NOT_FOUND">; }
 model StateConflict { @statusCode statusCode: 409; error: ApiError<"SLOT_UNAVAILABLE" | "SLOT_ALREADY_BOOKED" | "BOOKING_ALREADY_CANCELLED">; }
+model SlotConflict { @statusCode statusCode: 409; error: ApiError<"SLOT_OVERLAP">; }
 model HoldExpired { @statusCode statusCode: 410; error: ApiError<"HOLD_EXPIRED">; }
 model CancellationTooLate { @statusCode statusCode: 422; error: ApiError<"CANCELLATION_WINDOW_CLOSED">; }
 model InternalError { @statusCode statusCode: 500; error: ApiError<"INTERNAL_ERROR">; }
 
 model HealthResponse { status: "ok"; }
+
+model CreateOrganizerRequest {
+  /** Email address that receives notifications about this organizer's bookings. */
+  organizerEmail: ClientEmail;
+}
 
 model OrganizerCreatedResponse {
   @statusCode statusCode: 201;
@@ -74,6 +80,7 @@ model HoldResponse {
 model ConfirmBookingRequest {
   /** Secret returned when the hold was created, proving possession of the hold. */
   holdCredential: string;
+  /** Receives confirmation and subsequent cancellation updates for this booking. */
   clientEmail: ClientEmail;
 }
 
@@ -129,8 +136,8 @@ model ClientCancellationRequest {
 op health(): HealthResponse | InternalError;
 
 @route("/v1/organizers") @post
-@doc("Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response.")
-op createOrganizer(): OrganizerCreatedResponse | InternalError;
+@doc("Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response. organizerEmail receives booking confirmation and cancellation notifications.")
+op createOrganizer(@body request: CreateOrganizerRequest): OrganizerCreatedResponse | InvalidRequest | InternalError;
 
 @route("/v1/public/organizers/{organizerId}/availability") @get
 @doc("Returns only currently available slots. Held, booked, and withdrawn slots are excluded. When a hold expires, its slot becomes eligible for availability again.")
@@ -140,6 +147,7 @@ op getPublicAvailability(@path organizerId: string): AvailabilityResponse | Reso
 op createHold(@path organizerId: string, @body request: CreateHoldRequest): HoldResponse | InvalidRequest | ResourceNotFound | StateConflict | InternalError;
 
 @route("/v1/public/holds/{holdId}/confirmation") @post
+@doc("Confirms a booking and subscribes clientEmail to updates for this booking. The organizer and client receive confirmation and later cancellation notifications.")
 op confirmHold(@path holdId: string, @body request: ConfirmBookingRequest): BookingResponse | InvalidRequest | Unauthenticated | ResourceNotFound | StateConflict | HoldExpired | InternalError;
 
 @route("/v1/public/bookings/{bookingId}/cancellation") @post
@@ -148,7 +156,7 @@ op cancelBookingAsClient(@path bookingId: string, ...ClientCancellationRequest):
 @useAuth(BearerAuth)
 @doc("Requires the bearer management key scoped to this organizer ID.")
 @route("/v1/organizers/{organizerId}/slots") @post
-op createOrganizerSlot(@path organizerId: string, @body request: CreateSlotRequest): SlotResponse | InvalidRequest | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | StateConflict | InternalError;
+op createOrganizerSlot(@path organizerId: string, @body request: CreateSlotRequest): SlotResponse | InvalidRequest | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | StateConflict | SlotConflict | InternalError;
 
 @useAuth(BearerAuth)
 @doc("Requires the bearer management key scoped to this organizer ID.")

@@ -1,50 +1,46 @@
-import Fastify from 'fastify';
-import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { Type } from 'typebox';
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { buildApp } from './app.js';
+import { createSmtpSender, smtpConfigurationFromEnvironment } from './email-worker.js';
 
 const host = process.env.HOST ?? '0.0.0.0';
-const port = Number(process.env.PORT ?? 3000);
-const databasePath = resolve(process.env.DATABASE_PATH ?? './data/meeting-booking.sqlite');
+const port = Number(process.env.PORT ?? '3000');
+const databasePath = process.env.DATABASE_PATH ?? './data/meeting-booking.sqlite';
 
-mkdirSync(dirname(databasePath), { recursive: true });
-const database = new Database(databasePath);
-database.pragma('foreign_keys = ON');
-database.pragma('busy_timeout = 5000');
-database.pragma('journal_mode = WAL');
+async function start(): Promise<void> {
+  const smtpConfiguration = smtpConfigurationFromEnvironment();
+  if (process.env.NODE_ENV === 'production' && !smtpConfiguration) {
+    throw new Error('SMTP_HOST and SMTP_FROM must be configured in production.');
+  }
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    throw new Error('PORT must be an integer between 0 and 65535.');
+  }
 
-const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
+  const app = buildApp({
+    databasePath,
+    ...(smtpConfiguration ? { mailSender: createSmtpSender(smtpConfiguration) } : {}),
+  });
 
-app.get(
-  '/health',
-  {
-    schema: {
-      response: {
-        200: Type.Object({ status: Type.Literal('ok') }),
-      },
-    },
-  },
-  async () => ({ status: 'ok' as const }),
-);
+  if (!smtpConfiguration) {
+    app.log.warn('SMTP is not configured; transactional notifications will remain queued.');
+  }
 
-app.addHook('onClose', async () => {
-  database.close();
-});
+  const shutdown = async (signal: NodeJS.Signals) => {
+    app.log.info({ signal }, 'Shutting down');
+    await app.close();
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
-const shutdown = async (signal: NodeJS.Signals) => {
-  app.log.info({ signal }, 'Shutting down');
-  await app.close();
-};
-
-process.once('SIGINT', () => void shutdown('SIGINT'));
-process.once('SIGTERM', () => void shutdown('SIGTERM'));
-
-try {
-  await app.listen({ host, port });
-} catch (error) {
-  app.log.error(error);
-  await app.close();
-  process.exitCode = 1;
+  try {
+    await app.listen({ host, port });
+  } catch (error) {
+    app.log.error({ err: error }, 'Server failed to start');
+    await app.close();
+    process.exitCode = 1;
+  }
 }
+
+start().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : 'Server failed to start.';
+  process.stderr.write(`${message}\n`);
+  process.exitCode = 1;
+});

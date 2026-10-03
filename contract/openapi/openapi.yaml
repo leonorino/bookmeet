@@ -25,7 +25,7 @@ paths:
   /v1/organizers:
     post:
       operationId: createOrganizer
-      description: Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response.
+      description: Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response. organizerEmail receives booking confirmation and cancellation notifications.
       parameters: []
       responses:
         '201':
@@ -34,12 +34,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrganizerCreatedResponse'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidRequest'
         '500':
           description: Server error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizerRequest'
   /v1/organizers/{organizerId}/bookings:
     get:
       operationId: listOrganizerBookings
@@ -189,7 +201,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StateConflict'
+                anyOf:
+                  - $ref: '#/components/schemas/StateConflict'
+                  - $ref: '#/components/schemas/SlotConflict'
         '500':
           description: Server error
           content:
@@ -346,6 +360,7 @@ paths:
   /v1/public/holds/{holdId}/confirmation:
     post:
       operationId: confirmHold
+      description: Confirms a booking and subscribes clientEmail to updates for this booking. The organizer and client receive confirmation and later cancellation notifications.
       parameters:
         - name: holdId
           in: path
@@ -584,6 +599,7 @@ components:
           description: Secret returned when the hold was created, proving possession of the hold.
         clientEmail:
           $ref: '#/components/schemas/ClientEmail'
+          description: Receives confirmation and subsequent cancellation updates for this booking.
     CreateHoldRequest:
       type: object
       required:
@@ -591,6 +607,14 @@ components:
       properties:
         slotId:
           type: string
+    CreateOrganizerRequest:
+      type: object
+      required:
+        - organizerEmail
+      properties:
+        organizerEmail:
+          $ref: '#/components/schemas/ClientEmail'
+          description: Email address that receives notifications about this organizer's bookings.
     CreateSlotRequest:
       type: object
       required:
@@ -877,6 +901,33 @@ components:
         timeZone:
           type: string
           description: Organizer's IANA time-zone identifier, for example Europe/Paris.
+    SlotConflict:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - SLOT_OVERLAP
+              description: Stable machine-readable error identifier; the allowed value depends on the response status.
+            message:
+              type: string
+              description: Human-readable explanation safe to show to the caller.
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+              description: Optional field-level validation details.
+            requestId:
+              type: string
+              description: Request correlation identifier when available.
     SlotResponse:
       type: object
       required:
