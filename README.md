@@ -52,7 +52,7 @@ Checks and Docker builds run for pull requests and manual workflow runs. Pushes 
 - `ghcr.io/<owner>/meeting-booking-client`
 - `ghcr.io/<owner>/meeting-booking-server`
 
-Published images receive a full commit SHA tag (`sha-<commit>`); use the same SHA tag for a client/server pair from one commit. Pushes to `main` publish the `main` branch tag and `latest`. Version tags such as `v1.2.3` publish `1.2.3` and `1.2`. Pull requests and manual runs build images without publishing them.
+Published images receive a full commit SHA tag (`sha-<commit>`); use the same SHA tag for a client/server pair from one commit. Pushes to `main` publish the `main` branch tag and `latest`. After all checks pass on `main`, Conventional Commits determine whether to create a GitHub Release and matching `v<version>` tag: `fix` and `perf` commits trigger a patch release, `feat` commits trigger a minor release, and breaking `!` markers or `BREAKING CHANGE:` footers trigger a major release. Commit types such as `docs` and `chore` do not trigger a release unless marked as breaking. With no earlier version tag, the first release is `v1.0.0`. A release publishes its plain version (`1.2.3`) and major/minor (`1.2`) tags on both images as part of the same workflow run. Pushing an existing version tag such as `v1.2.3` also publishes its `1.2.3` and `1.2` image tags. Pull requests and manual runs build images without publishing them.
 
 ## Product notes
 

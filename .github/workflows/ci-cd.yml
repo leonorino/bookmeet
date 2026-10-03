@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   client-check:
@@ -69,13 +69,63 @@ jobs:
         run: git diff --exit-code -- openapi/openapi.yaml
         working-directory: contract
 
-  docker:
-    name: Build ${{ matrix.image }} image
+  release:
+    name: Create GitHub release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
       - client-check
       - server-check
       - contract-check
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      major_minor: ${{ steps.release.outputs.major_minor }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Create release from Conventional Commits
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx --yes \
+            --package semantic-release@25.0.9 \
+            --package conventional-changelog-conventionalcommits@9.3.1 \
+            semantic-release
+          release_tag="$(git tag --points-at HEAD --list 'v[0-9]*' | awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/ { print }' | sort -V | tail -n 1)"
+          if [ -z "$release_tag" ]; then
+            echo 'tag=' >> "$GITHUB_OUTPUT"
+            echo 'version=' >> "$GITHUB_OUTPUT"
+            echo 'major_minor=' >> "$GITHUB_OUTPUT"
+          else
+            version="${release_tag#v}"
+            major_minor="$(printf '%s' "$version" | cut -d. -f1-2)"
+            echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "major_minor=$major_minor" >> "$GITHUB_OUTPUT"
+          fi
+
+  docker:
+    name: Build ${{ matrix.image }} image
+    runs-on: ubuntu-latest
+    if: >-
+      always() &&
+      needs.client-check.result == 'success' &&
+      needs.server-check.result == 'success' &&
+      needs.contract-check.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped')
+    needs:
+      - client-check
+      - server-check
+      - contract-check
+      - release
     permissions:
       contents: read
       packages: write
@@ -111,6 +161,8 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.version != '' }}
+            type=raw,value=${{ needs.release.outputs.major_minor }},enable=${{ needs.release.outputs.major_minor != '' }}
           flavor: |
             latest=false
       - name: Build and publish
