@@ -4,7 +4,7 @@ using TypeSpec.Http;
 
 @service(#{ title: "Meeting Slot Booking API" })
 @server("https://api.example.com", "Draft API server")
-@doc("Draft API contract. Organizer operations require authentication, but the mechanism is TBD; no authentication scheme is defined yet.")
+@doc("Draft API contract. Organizer management operations use a per-organizer bearer management key. Public booking operations do not require it.")
 namespace MeetingBooking;
 
 scalar UtcInstant extends utcDateTime;
@@ -27,7 +27,7 @@ model ApiError<Code extends string> {
 model ErrorDetail { field: string; message: string; }
 
 model InvalidRequest { @statusCode statusCode: 400; error: ApiError<"INVALID_REQUEST">; }
-model Unauthenticated { @statusCode statusCode: 401; error: ApiError<"UNAUTHENTICATED" | "HOLD_CREDENTIAL_INVALID" | "CANCELLATION_CREDENTIAL_INVALID">; }
+model Unauthenticated { @statusCode statusCode: 401; error: ApiError<"UNAUTHENTICATED" | "ORGANIZER_KEY_INVALID" | "HOLD_CREDENTIAL_INVALID" | "CANCELLATION_CREDENTIAL_INVALID">; }
 model OrganizerAccessDenied { @statusCode statusCode: 403; error: ApiError<"ORGANIZER_ACCESS_DENIED">; }
 model ResourceNotFound { @statusCode statusCode: 404; error: ApiError<"ORGANIZER_NOT_FOUND" | "SLOT_NOT_FOUND" | "HOLD_NOT_FOUND" | "BOOKING_NOT_FOUND">; }
 model StateConflict { @statusCode statusCode: 409; error: ApiError<"SLOT_UNAVAILABLE" | "SLOT_ALREADY_BOOKED" | "BOOKING_ALREADY_CANCELLED">; }
@@ -36,6 +36,13 @@ model CancellationTooLate { @statusCode statusCode: 422; error: ApiError<"CANCEL
 model InternalError { @statusCode statusCode: 500; error: ApiError<"INTERNAL_ERROR">; }
 
 model HealthResponse { status: "ok"; }
+
+model OrganizerCreatedResponse {
+  @statusCode statusCode: 201;
+  organizerId: string;
+  /** Cryptographically random 256-bit management key; returned only when this organizer is created. */
+  managementKey: string;
+}
 
 model Slot {
   slotId: string;
@@ -121,6 +128,10 @@ model ClientCancellationRequest {
 @route("/health") @get
 op health(): HealthResponse | InternalError;
 
+@route("/v1/organizers") @post
+@doc("Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response.")
+op createOrganizer(): OrganizerCreatedResponse | InternalError;
+
 @route("/v1/public/organizers/{organizerId}/availability") @get
 @doc("Returns only currently available slots. Held, booked, and withdrawn slots are excluded. When a hold expires, its slot becomes eligible for availability again.")
 op getPublicAvailability(@path organizerId: string): AvailabilityResponse | ResourceNotFound | InternalError;
@@ -134,22 +145,27 @@ op confirmHold(@path holdId: string, @body request: ConfirmBookingRequest): Book
 @route("/v1/public/bookings/{bookingId}/cancellation") @post
 op cancelBookingAsClient(@path bookingId: string, ...ClientCancellationRequest): CancellationResponse | Unauthenticated | ResourceNotFound | StateConflict | CancellationTooLate | InternalError;
 
-@doc("Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.")
+@useAuth(BearerAuth)
+@doc("Requires the bearer management key scoped to this organizer ID.")
 @route("/v1/organizers/{organizerId}/slots") @post
 op createOrganizerSlot(@path organizerId: string, @body request: CreateSlotRequest): SlotResponse | InvalidRequest | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | StateConflict | InternalError;
 
-@doc("Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.")
+@useAuth(BearerAuth)
+@doc("Requires the bearer management key scoped to this organizer ID.")
 @route("/v1/organizers/{organizerId}/slots") @get
 op listOrganizerSlots(@path organizerId: string): SlotsResponse | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | InternalError;
 
-@doc("Organizer-only operation. Removes an unbooked slot. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.")
+@useAuth(BearerAuth)
+@doc("Removes an unbooked slot. Requires the bearer management key scoped to this organizer ID.")
 @route("/v1/organizers/{organizerId}/slots/{slotId}") @delete
 op removeOrganizerSlot(@path organizerId: string, @path slotId: string): void | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | StateConflict | InternalError;
 
-@doc("Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.")
+@useAuth(BearerAuth)
+@doc("Requires the bearer management key scoped to this organizer ID.")
 @route("/v1/organizers/{organizerId}/bookings") @get
 op listOrganizerBookings(@path organizerId: string): OrganizerBookingsResponse | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | InternalError;
 
-@doc("Organizer-only operation. Cancels a confirmed booking, subject to the 24-hour cutoff. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.")
+@useAuth(BearerAuth)
+@doc("Cancels a confirmed booking, subject to the 24-hour cutoff. Requires the bearer management key scoped to this organizer ID.")
 @route("/v1/organizers/{organizerId}/bookings/{bookingId}/cancellation") @post
 op cancelBookingAsOrganizer(@path organizerId: string, @path bookingId: string): OrganizerCancellationResponse | Unauthenticated | OrganizerAccessDenied | ResourceNotFound | StateConflict | CancellationTooLate | InternalError;

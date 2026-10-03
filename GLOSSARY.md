@@ -18,3 +18,6 @@ A temporary exclusive claim on an available slot created when a client selects i
 
 **Booking**:
 A confirmed reservation of one organizer's slot for one client.
+
+**Organizer management key**:
+A private secret that proves its holder can manage one organizer's slots and bookings.

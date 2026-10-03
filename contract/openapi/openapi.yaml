@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Meeting Slot Booking API
-  description: Draft API contract. Organizer operations require authentication, but the mechanism is TBD; no authentication scheme is defined yet.
+  description: Draft API contract. Organizer management operations use a per-organizer bearer management key. Public booking operations do not require it.
   version: 0.0.0
 tags: []
 paths:
@@ -22,10 +22,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalError'
+  /v1/organizers:
+    post:
+      operationId: createOrganizer
+      description: Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response.
+      parameters: []
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerCreatedResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /v1/organizers/{organizerId}/bookings:
     get:
       operationId: listOrganizerBookings
-      description: Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      description: Requires the bearer management key scoped to this organizer ID.
       parameters:
         - name: organizerId
           in: path
@@ -63,10 +81,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalError'
+      security:
+        - BearerAuth: []
   /v1/organizers/{organizerId}/bookings/{bookingId}/cancellation:
     post:
       operationId: cancelBookingAsOrganizer
-      description: Organizer-only operation. Cancels a confirmed booking, subject to the 24-hour cutoff. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      description: Cancels a confirmed booking, subject to the 24-hour cutoff. Requires the bearer management key scoped to this organizer ID.
       parameters:
         - name: organizerId
           in: path
@@ -121,10 +141,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalError'
+      security:
+        - BearerAuth: []
   /v1/organizers/{organizerId}/slots:
     post:
       operationId: createOrganizerSlot
-      description: Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      description: Requires the bearer management key scoped to this organizer ID.
       parameters:
         - name: organizerId
           in: path
@@ -180,9 +202,11 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateSlotRequest'
+      security:
+        - BearerAuth: []
     get:
       operationId: listOrganizerSlots
-      description: Organizer-only operation. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      description: Requires the bearer management key scoped to this organizer ID.
       parameters:
         - name: organizerId
           in: path
@@ -220,10 +244,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalError'
+      security:
+        - BearerAuth: []
   /v1/organizers/{organizerId}/slots/{slotId}:
     delete:
       operationId: removeOrganizerSlot
-      description: Organizer-only operation. Removes an unbooked slot. Requires organizer authentication and authorization; the mechanism is TBD and intentionally absent from this draft contract.
+      description: Removes an unbooked slot. Requires the bearer management key scoped to this organizer ID.
       parameters:
         - name: organizerId
           in: path
@@ -268,6 +294,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalError'
+      security:
+        - BearerAuth: []
   /v1/public/bookings/{bookingId}/cancellation:
     post:
       operationId: cancelBookingAsClient
@@ -773,6 +801,17 @@ components:
       properties:
         booking:
           $ref: '#/components/schemas/OrganizerBookingDetails'
+    OrganizerCreatedResponse:
+      type: object
+      required:
+        - organizerId
+        - managementKey
+      properties:
+        organizerId:
+          type: string
+        managementKey:
+          type: string
+          description: Cryptographically random 256-bit management key; returned only when this organizer is created.
     OrganizerSlot:
       type: object
       required:
@@ -898,6 +937,7 @@ components:
               type: string
               enum:
                 - UNAUTHENTICATED
+                - ORGANIZER_KEY_INVALID
                 - HOLD_CREDENTIAL_INVALID
                 - CANCELLATION_CREDENTIAL_INVALID
               description: Stable machine-readable error identifier; the allowed value depends on the response status.
@@ -915,6 +955,10 @@ components:
     UtcInstant:
       type: string
       format: date-time
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: Bearer
 servers:
   - url: https://api.example.com
     description: Draft API server

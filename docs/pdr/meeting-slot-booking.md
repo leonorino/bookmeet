@@ -24,13 +24,20 @@ The service gives the organizer a single place to offer meeting times and gives 
 
 ## 4. Scenarios
 
+### Organizer creates a booking page
+
+1. The organizer creates a workspace without registering an account.
+2. The service returns an organizer-specific management key once. The organizer keeps it private; it is not part of the public booking link.
+3. The organizer uses the key to manage slots and bookings for that workspace, including viewing client email addresses. If the key is lost, there is no recovery flow; the organizer creates a new workspace. If the key is exposed, the old workspace is compromised because the initial service has no key revocation flow.
+4. The organizer shares the public booking link, which identifies the workspace but does not grant management access.
+
 ### Main flow: client books an offered meeting slot
 
 1. The organizer marks one or more individual meeting slots as available.
 2. The organizer shares the booking link with a client.
 3. The client opens the link and sees the available slots with their dates, times, and time zone.
-4. The client selects a slot. If it is still available, the service immediately places a temporary hold on it and hides it from other clients.
-5. The client enters an email address and confirms the booking within one minute of the hold being created.
+4. The client selects a slot. If it is still available, the service immediately places a temporary hold on it, hides it from other clients, and returns a private credential for confirming that hold.
+5. The client enters an email address and confirms the booking within one minute by presenting the hold credential.
 6. The service converts the hold into a confirmed booking.
 7. The service records email notifications for the client and organizer. Delivery happens after the booking is committed and can be retried if it fails.
 
@@ -55,6 +62,8 @@ The booking result should make clear whether the slot was successfully reserved.
 ### In scope
 
 - Organizer marks individual meeting slots available within the service and shares a reusable, organizer-specific booking link.
+- Organizer creates an organizer workspace without creating an account. The service returns a public organizer ID and a separate private management key that controls that organizer's slots and bookings. See [ADR-0008](../adr/0008-organizer-management-keys.md) for the key's lifecycle and API handling.
+- The management key is shown only when the organizer is created. There is no password, login session, key recovery, key rotation, or key transfer in the initial service; an organizer who loses the key must create a new workspace, and an exposed key compromises its workspace.
 - Client views offered slots, chooses one, provides an email address, and confirms without registering.
 - Selecting a slot immediately places a temporary hold for up to one minute. Confirmation converts the hold to a booking; expiry releases it.
 - Each confirmed slot can have only one booking.
@@ -75,8 +84,6 @@ The booking result should make clear whether the slot was successfully reserved.
 
 ## 6. Open decisions
 
-- How organizers authenticate and prove they can manage their slots and bookings.
-- How a client proves ownership of an active hold when confirming it.
 - What happens to an active hold when a client selects a different slot or leaves the booking page.
 - How to resolve ambiguous and nonexistent local times around daylight-saving transitions when organizers create slots.
 - Which email provider and retry limits/backoff policy to use, including how to avoid duplicate delivery after an ambiguous provider response.
