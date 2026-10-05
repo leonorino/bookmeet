@@ -1,51 +1,207 @@
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
+import { ApiError, api } from "../lib/api";
+import { saveManagementKey } from "../lib/management-key";
+
+interface CreatedWorkspace {
+  organizerId: string;
+  managementKey: string;
+  keySaved: boolean;
+}
+
+export function meta() {
+  return [
+    { title: "Meeting Booking — make time for the conversation" },
+    {
+      name: "description",
+      content: "Share the times that work for you and let clients book without an account.",
+    },
+  ];
+}
+
 export default function Home() {
+  const navigate = useNavigate();
+  const [organizerEmail, setOrganizerEmail] = useState("");
+  const [organizerId, setOrganizerId] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
+  const [workspace, setWorkspace] = useState<CreatedWorkspace | null>(null);
+
+  const publicLink = workspace
+    ? `${window.location.origin}/book/${encodeURIComponent(workspace.organizerId)}`
+    : "";
+
+  async function handleCreateWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreating(true);
+    setError("");
+    setWorkspace(null);
+
+    try {
+      const created = await api.createOrganizer(organizerEmail.trim());
+      let keySaved = true;
+      try {
+        saveManagementKey(created.organizerId, created.managementKey);
+      } catch {
+        keySaved = false;
+      }
+      setWorkspace({ ...created, keySaved });
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : "The booking page could not be created. Try again.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function handleOpenWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const id = organizerId.trim();
+    if (id) navigate(`/manage/${encodeURIComponent(id)}`);
+  }
+
+  async function copy(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyMessage(`${label} copied.`);
+    } catch {
+      setCopyMessage(`Copy unavailable. Select and copy the ${label.toLowerCase()} above.`);
+    }
+  }
+
   return (
     <main className="page-shell">
       <header className="site-header">
-        <a className="wordmark" href="/" aria-label="Meeting Booking home">
+        <Link className="wordmark" to="/" aria-label="Meeting Booking home">
           <span className="wordmark-icon" aria-hidden="true">M</span>
-          Meeting Booking
-        </a>
-        <span className="header-note">Simple scheduling, made human</span>
+          <span>Meeting Booking</span>
+        </Link>
+        <nav className="main-nav" aria-label="Main navigation">
+          <Link to="/cancel">Cancel a booking</Link>
+        </nav>
       </header>
 
-      <section className="hero" aria-labelledby="hero-title">
+      <section className="home-hero" aria-labelledby="hero-title">
         <div className="hero-copy">
-          <p className="eyebrow"><span /> A little more time for what matters</p>
-          <h1 id="hero-title">Meetings that fit <em>your</em> day.</h1>
+          <p className="eyebrow">A simpler way to find a time</p>
+          <h1 id="hero-title">Make time for the conversation.</h1>
           <p className="intro">
-            Share the times that work for you. Let people choose a moment that
-            works for them. No back-and-forth required.
+            Share a few meeting times. Let clients choose the one that works for them.
+            No account and no back-and-forth needed.
           </p>
-          <div className="hero-actions">
-            <a className="button button-primary" href="#how-it-works">
-              See how it works <span aria-hidden="true">↗</span>
-            </a>
-            <span className="action-caption">For thoughtful conversations, big and small.</span>
-          </div>
-          <div className="trust-note"><span aria-hidden="true">✳</span> No account needed to book</div>
+          <p className="trust-note"><span aria-hidden="true">✓</span> One clear time, confirmed for everyone.</p>
         </div>
 
-        <div className="booking-card" aria-label="Example meeting availability">
-          <div className="card-topline"><span>YOUR WEEK, AT A GLANCE</span><span className="live-dot">● &nbsp;YOUR TIME ZONE</span></div>
-          <div className="calendar-heading"><div><span className="muted-label">AVAILABILITY</span><h2>A little time, set aside.</h2></div><span className="calendar-arrow" aria-hidden="true">↗</span></div>
-          <div className="calendar">
-            <div className="day-column"><span className="day-name">MON</span><span className="day-number">14</span><span className="slot slot-muted">9:30</span><span className="slot slot-muted">11:00</span><span className="slot slot-muted">2:00</span></div>
-            <div className="day-column selected-day"><span className="day-name">TUE</span><span className="day-number">15</span><span className="slot">9:30</span><span className="slot slot-selected">11:00 <span aria-hidden="true">✓</span></span><span className="slot">2:00</span></div>
-            <div className="day-column"><span className="day-name">WED</span><span className="day-number">16</span><span className="slot">10:00</span><span className="slot">1:30</span><span className="slot slot-muted">3:00</span></div>
-          </div>
-          <div className="card-footer"><span><i /> A good time is waiting</span><span>YOUR LINK, YOUR RULES</span></div>
-          <div className="card-decoration" aria-hidden="true">✳</div>
+        <section className="panel start-panel" aria-labelledby="create-heading">
+          <p className="eyebrow">For organizers</p>
+          <h2 id="create-heading">Create a booking page</h2>
+          <p className="panel-copy">
+            Add your notification email to create a workspace. You can add meeting times next.
+          </p>
+          <form className="form-stack" onSubmit={handleCreateWorkspace}>
+            <label className="field">
+              <span>Organizer email</span>
+              <input
+                autoComplete="email"
+                type="email"
+                name="organizerEmail"
+                maxLength={254}
+                required
+                value={organizerEmail}
+                onChange={(event) => setOrganizerEmail(event.target.value)}
+              />
+              <span className="field-help">Booking confirmations and cancellations will be sent here.</span>
+            </label>
+            <button className="button button-primary" type="submit" disabled={creating}>
+              {creating ? "Creating page…" : "Create booking page"}
+            </button>
+          </form>
+
+          {error && <p className="notice notice-error" role="alert">{error}</p>}
+
+          {workspace && (
+            <section className="creation-result" aria-labelledby="workspace-ready" aria-live="polite">
+              <div className="result-rule" />
+              <p className="eyebrow">Workspace ready</p>
+              <h3 id="workspace-ready">Save your management key</h3>
+              <p className="panel-copy">
+                This key controls your workspace. Keep it private; it cannot be recovered later.
+              </p>
+              <div className="copy-row">
+                <code className="copy-value" aria-label="Management key">{workspace.managementKey}</code>
+                <button className="button button-secondary" type="button" onClick={() => void copy(workspace.managementKey, "Management key")}>
+                  Copy key
+                </button>
+              </div>
+              <p className="field-help">
+                {workspace.keySaved
+                  ? "This device will remember the key for your next visit."
+                  : "This browser could not save the key. Copy it now; you will need it to manage this page."}
+              </p>
+              <div className="field">
+                <span>Your public booking link</span>
+                <div className="copy-row">
+                  <code className="copy-value">{publicLink}</code>
+                  <button className="button button-secondary" type="button" onClick={() => void copy(publicLink, "Booking link")}>
+                    Copy link
+                  </button>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => navigate(`/manage/${encodeURIComponent(workspace.organizerId)}`)}
+                >
+                  Add meeting times
+                </button>
+                <Link className="text-link" to={`/book/${encodeURIComponent(workspace.organizerId)}`}>
+                  Preview booking page
+                </Link>
+              </div>
+              {copyMessage && <p className="field-help" role="status">{copyMessage}</p>}
+            </section>
+          )}
+        </section>
+      </section>
+
+      <section className="home-secondary" aria-labelledby="manage-heading">
+        <div>
+          <p className="eyebrow">Already have a page?</p>
+          <h2 id="manage-heading">Manage your availability.</h2>
+          <p className="panel-copy">Enter the organizer ID from your booking link. Your saved key will be used on this device.</p>
         </div>
-        <div className="hero-scribble" aria-hidden="true">↘</div>
+        <form className="manage-entry" onSubmit={handleOpenWorkspace}>
+          <label className="field">
+            <span>Organizer ID</span>
+            <input
+              autoComplete="off"
+              name="organizerId"
+              required
+              value={organizerId}
+              onChange={(event) => setOrganizerId(event.target.value)}
+            />
+          </label>
+          <button className="button button-secondary" type="submit">Open workspace</button>
+        </form>
       </section>
 
-      <section id="how-it-works" className="how-section">
-        <div><p className="eyebrow">A calmer way to coordinate</p><h2>Good things happen<br />when time lines up.</h2></div>
-        <p>Meeting Booking helps organizers share availability and gives clients a simple way to choose a slot. Pick a time, and make room for the conversation.</p>
+      <section className="how-section" aria-labelledby="how-heading">
+        <div>
+          <p className="eyebrow">How it works</p>
+          <h2 id="how-heading">A time chosen.<br />A plan confirmed.</h2>
+        </div>
+        <ol className="steps-list">
+          <li><span className="step-number mono">01</span><span>Organizers share one-off meeting times.</span></li>
+          <li><span className="step-number mono">02</span><span>Clients choose a time and add their email.</span></li>
+          <li><span className="step-number mono">03</span><span>Both sides receive the confirmed meeting details.</span></li>
+        </ol>
       </section>
 
-      <footer className="site-footer"><span>Thoughtful meetings start here.</span><span>MADE FOR REAL LIFE &nbsp;✳</span></footer>
+      <footer className="site-footer">
+        <span>Meeting Booking</span>
+        <Link to="/cancel">Cancel an existing booking</Link>
+      </footer>
     </main>
   );
 }
