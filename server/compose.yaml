@@ -1,20 +1,29 @@
 services:
   server:
     build: .
+    depends_on:
+      - mailpit
     ports:
       - "${PORT:-3000}:3000"
     environment:
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_PATH: /data/meeting-booking.sqlite
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM: ${SMTP_FROM:-notifications@example.test}
     volumes:
       - meeting-booking-data:/data
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
 volumes:
