@@ -1,8 +1,8 @@
 # Client
 
-The client is a TypeScript React application built with React Router framework mode and SPA output. Its initial home page introduces the meeting booking product; organizer availability and client booking flows will be added against the server API as product work proceeds.
+The client is a TypeScript React application built with React Router framework mode and SPA output. Organizers can create a workspace, publish and manage meeting slots, review bookings, and cancel bookings. Clients can view a public organizer page, reserve a slot, confirm with an email address, and cancel using their booking ID and cancellation credential.
 
-Booking rules, slot reservation, persistence, and notifications belong to the separate server. The browser bundle must not contain credentials or API secrets.
+Booking rules, slot reservation, persistence, and notifications belong to the separate server. The browser bundle must not contain credentials or API secrets. Organizer management keys are credentials entered by the organizer; when a workspace is created, the client stores its key in local storage on that device and shows it once for copying. The key is never placed in a URL. Use “Forget this device” on the management page to remove a saved key.
 
 ## Development
 
@@ -17,16 +17,16 @@ Open the local URL printed by Vite. Use `npm run typecheck` to check route types
 
 ## Configuration
 
-`VITE_API_BASE_URL` may be set to the public base URL of the server API at build time. It is optional in this starter and must never contain a secret; Vite variables are embedded in browser code.
+`VITE_API_BASE_URL` may be set to the public base URL of the server API at build time. It must never contain a secret; Vite variables are embedded in browser code. If it is empty during local development, Vite proxies `/v1` requests to `http://localhost:3000`. For a separate production API origin, configure the API to allow the deployed client origin through CORS and build with `VITE_API_BASE_URL` set to the public API URL.
 
 ## Docker
 
 ```sh
-docker build -t meeting-booking-client .
+docker build --build-arg VITE_API_BASE_URL=https://api.example.com -t meeting-booking-client .
 docker run --rm -p 8080:80 meeting-booking-client
 ```
 
-The Nginx image serves the static build and falls back to `index.html` for client-side routes, including direct visits and refreshes.
+The Nginx image serves the static build and falls back to `index.html` for client-side routes, including direct visits and refreshes. Replace the example API URL with the public server API URL for the deployment. The value is public configuration, not a credential.
 
 ## References
 
