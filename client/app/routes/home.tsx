@@ -9,6 +9,24 @@ interface CreatedWorkspace {
   keySaved: boolean;
 }
 
+function parseOrganizerId(value: string): string | null {
+  const input = value.trim();
+  if (!input) return null;
+
+  if (!/[/:?#]/.test(input) && !/^[a-z][a-z\d+.-]*:/i.test(input)) return input;
+
+  try {
+    const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(input);
+    const url = new URL(input, window.location.origin);
+    if (hasScheme && url.origin !== window.location.origin) return null;
+
+    const match = /^\/book\/([^/]+)\/?$/.exec(url.pathname);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function meta() {
   return [
     { title: "Meeting Booking — make time for the conversation" },
@@ -25,6 +43,7 @@ export default function Home() {
   const [organizerId, setOrganizerId] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [manageError, setManageError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [workspace, setWorkspace] = useState<CreatedWorkspace | null>(null);
 
@@ -56,8 +75,13 @@ export default function Home() {
 
   function handleOpenWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const id = organizerId.trim();
-    if (id) navigate(`/manage/${encodeURIComponent(id)}`);
+    const id = parseOrganizerId(organizerId);
+    if (!id) {
+      setManageError("Enter an organizer ID or paste its public booking link from this site.");
+      return;
+    }
+    setManageError("");
+    navigate(`/manage/${encodeURIComponent(id)}`);
   }
 
   async function copy(value: string, label: string) {
@@ -123,28 +147,41 @@ export default function Home() {
             <section className="creation-result" aria-labelledby="workspace-ready" aria-live="polite">
               <div className="result-rule" />
               <p className="eyebrow">Workspace ready</p>
-              <h3 id="workspace-ready">Save your management key</h3>
-              <p className="panel-copy">
-                This key controls your workspace. Keep it private; it cannot be recovered later.
-              </p>
-              <div className="copy-row">
-                <code className="copy-value" aria-label="Management key">{workspace.managementKey}</code>
-                <button className="button button-secondary" type="button" onClick={() => void copy(workspace.managementKey, "Management key")}>
-                  Copy key
-                </button>
-              </div>
-              <p className="field-help">
-                {workspace.keySaved
-                  ? "This device will remember the key for your next visit."
-                  : "This browser could not save the key. Copy it now; you will need it to manage this page."}
-              </p>
-              <div className="field">
-                <span>Your public booking link</span>
+              <h3 id="workspace-ready">Booking page created</h3>
+              <div className="result-share">
+                <h4 className="result-section-title">Booking link</h4>
+                <p className="field-help">Share this link with clients.</p>
                 <div className="copy-row">
-                  <code className="copy-value">{publicLink}</code>
+                  <code className="copy-value" aria-label="Public booking link">{publicLink}</code>
                   <button className="button button-secondary" type="button" onClick={() => void copy(publicLink, "Booking link")}>
                     Copy link
                   </button>
+                </div>
+              </div>
+              <div className="workspace-details">
+                <h4 className="result-section-title">Workspace details</h4>
+                <div className="field">
+                  <span>Management key</span>
+                  <div className="copy-row">
+                    <code className="copy-value" aria-label="Management key">{workspace.managementKey}</code>
+                    <button className="button button-secondary" type="button" onClick={() => void copy(workspace.managementKey, "Management key")}>
+                      Copy key
+                    </button>
+                  </div>
+                  <p className="field-help">
+                    {workspace.keySaved
+                      ? "Saved on this device. Keep it private; it can’t be recovered."
+                      : "Not saved here. Copy it now; keep it private. It can’t be recovered."}
+                  </p>
+                </div>
+                <div className="field">
+                  <span>Organizer ID</span>
+                  <div className="copy-row">
+                    <code className="copy-value" aria-label="Organizer ID">{workspace.organizerId}</code>
+                    <button className="button button-secondary" type="button" onClick={() => void copy(workspace.organizerId, "Organizer ID")}>
+                      Copy ID
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="form-actions">
@@ -169,21 +206,25 @@ export default function Home() {
         <div>
           <p className="eyebrow">Already have a page?</p>
           <h2 id="manage-heading">Manage your availability.</h2>
-          <p className="panel-copy">Enter the organizer ID from your booking link. Your saved key will be used on this device.</p>
+          <p className="panel-copy">Paste your organizer ID or public booking link. Your saved key will be used on this device.</p>
         </div>
         <form className="manage-entry" onSubmit={handleOpenWorkspace}>
           <label className="field">
-            <span>Organizer ID</span>
+            <span>Organizer ID or booking link</span>
             <input
               autoComplete="off"
               name="organizerId"
               required
               value={organizerId}
-              onChange={(event) => setOrganizerId(event.target.value)}
+              onChange={(event) => {
+                setOrganizerId(event.target.value);
+                setManageError("");
+              }}
             />
           </label>
           <button className="button button-secondary" type="submit">Open workspace</button>
         </form>
+        {manageError && <p className="notice notice-error" role="alert">{manageError}</p>}
       </section>
 
       <section className="how-section" aria-labelledby="how-heading">
