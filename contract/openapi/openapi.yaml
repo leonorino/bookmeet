@@ -619,15 +619,16 @@ components:
       type: object
       required:
         - startAt
-        - endAt
+        - durationMinutes
         - timeZone
       properties:
         startAt:
           $ref: '#/components/schemas/UtcInstant'
           description: Start instant in UTC.
-        endAt:
-          $ref: '#/components/schemas/UtcInstant'
-          description: End instant in UTC; must be after startAt.
+        durationMinutes:
+          type: integer
+          minimum: 1
+          description: Positive whole number of minutes from startAt; the server computes endAt.
         timeZone:
           type: string
           description: IANA time-zone identifier used to display the slot.

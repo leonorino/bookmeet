@@ -288,11 +288,16 @@ export class BookingService {
     return result.value;
   }
 
-  createSlot(organizerId: string, request: { startAt: string; endAt: string; timeZone: string }): SlotDetails {
+  createSlot(organizerId: string, request: { startAt: string; durationMinutes: number; timeZone: string }): SlotDetails {
     const now = this.now();
     const startAt = parseUtcInstant(request.startAt, 'startAt');
-    const endAt = parseUtcInstant(request.endAt, 'endAt');
-    if (endAt <= startAt) throw invalidRequest('endAt must be after startAt.', 'endAt');
+    if (!Number.isSafeInteger(request.durationMinutes) || request.durationMinutes < 1) {
+      throw invalidRequest('durationMinutes must be a positive whole number of minutes.', 'durationMinutes');
+    }
+    const endAt = startAt + request.durationMinutes * 60_000;
+    if (!Number.isFinite(endAt) || endAt <= startAt || Math.abs(endAt) > 8.64e15 || !Number.isFinite(new Date(endAt).getTime())) {
+      throw invalidRequest('durationMinutes produces an invalid end instant.', 'durationMinutes');
+    }
     if (startAt <= now) throw invalidRequest('startAt must be in the future.', 'startAt');
     if (!isIanaTimeZone(request.timeZone)) throw invalidRequest('timeZone must be a valid IANA time-zone identifier.', 'timeZone');
 

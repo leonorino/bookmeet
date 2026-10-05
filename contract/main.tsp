@@ -111,8 +111,9 @@ model OrganizerBookingDetails {
 model CreateSlotRequest {
   /** Start instant in UTC. */
   startAt: UtcInstant;
-  /** End instant in UTC; must be after startAt. */
-  endAt: UtcInstant;
+  /** Positive whole number of minutes from startAt; the server computes endAt. */
+  @minValue(1)
+  durationMinutes: integer;
   /** IANA time-zone identifier used to display the slot. */
   timeZone: string;
 }

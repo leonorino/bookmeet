@@ -191,7 +191,7 @@ export function buildApp(options: AppOptions = {}) {
   app.post('/v1/organizers/:organizerId/slots', {
     schema: {
       params: Type.Object({ organizerId: Id }),
-      body: Type.Object({ startAt: UtcInstant, endAt: UtcInstant, timeZone: Type.String({ minLength: 1 }) }),
+      body: Type.Object({ startAt: UtcInstant, durationMinutes: Type.Integer({ minimum: 1 }), timeZone: Type.String({ minLength: 1 }) }),
       response: {
         201: Type.Object({ slot: SlotSchema }),
         400: errorSchema(['INVALID_REQUEST']),

@@ -131,7 +131,7 @@ export const api = {
   createOrganizerSlot(
     organizerId: string,
     managementKey: string,
-    slot: Pick<Slot, "startAt" | "endAt" | "timeZone">,
+    slot: { startAt: string; durationMinutes: number; timeZone: string },
   ): Promise<{ slot: Slot }> {
     return request(`/v1/organizers/${idPathSegment(organizerId)}/slots`, {
       ...jsonBody(slot, bearerHeaders(managementKey)),

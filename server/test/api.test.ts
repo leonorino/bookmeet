@@ -84,13 +84,13 @@ async function createSlot(
   app: ReturnType<typeof buildApp>,
   organizer: OrganizerResult,
   startAt = INITIAL_TIME + 48 * HOUR,
-  endAt = startAt + HOUR,
+  durationMinutes = 60,
 ): Promise<SlotResult['slot']> {
   const response = await app.inject({
     method: 'POST',
     url: `/v1/organizers/${organizer.organizerId}/slots`,
     headers: { authorization: `Bearer ${organizer.managementKey}` },
-    payload: { startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), timeZone: 'Europe/Paris' },
+    payload: { startAt: new Date(startAt).toISOString(), durationMinutes, timeZone: 'Europe/Paris' },
   });
   expect(response.statusCode).toBe(201);
   return response.json<SlotResult>().slot;
@@ -185,7 +185,7 @@ describe('Meeting Slot Booking API', () => {
       headers: { authorization: `Bearer ${organizer.managementKey}` },
       payload: {
         startAt: new Date(INITIAL_TIME - HOUR).toISOString(),
-        endAt: new Date(INITIAL_TIME + HOUR).toISOString(),
+        durationMinutes: 120,
         timeZone: 'Europe/Paris',
       },
     });
@@ -198,7 +198,7 @@ describe('Meeting Slot Booking API', () => {
       headers: { authorization: `Bearer ${organizer.managementKey}` },
       payload: {
         startAt: new Date(INITIAL_TIME + 48 * HOUR + 30 * 60_000).toISOString(),
-        endAt: new Date(INITIAL_TIME + 49 * HOUR + 30 * 60_000).toISOString(),
+        durationMinutes: 60,
         timeZone: 'Europe/Paris',
       },
     });
@@ -211,7 +211,7 @@ describe('Meeting Slot Booking API', () => {
       headers: { authorization: `Bearer ${organizer.managementKey}` },
       payload: {
         startAt: new Date(INITIAL_TIME + 60 * HOUR).toISOString(),
-        endAt: new Date(INITIAL_TIME + 61 * HOUR).toISOString(),
+        durationMinutes: 60,
         timeZone: '+01:00',
       },
     });
