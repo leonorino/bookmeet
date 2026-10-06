@@ -328,7 +328,7 @@ export default function Manage() {
     <main className={`page-shell${selection ? " has-calendar-selection" : ""}`}>
       <header className="site-header">
         <Link className="wordmark" to="/">{t("Meeting Booking")}</Link>
-        <nav className="main-nav" aria-label={t("Main navigation")}><Link to={`/book/${encodeURIComponent(organizerId)}`}>{t("Public booking page")}</Link><Link to="/cancel">{t("Cancel a booking")}</Link><LanguageSwitcher /></nav>
+        <nav className="main-nav" aria-label={t("Main navigation")}><Link to={`/book/${encodeURIComponent(organizerId)}`}>{t("Public booking page")}</Link><LanguageSwitcher /></nav>
       </header>
       <section className="page-heading">
         <h1>{t("Manage your availability")}</h1>
