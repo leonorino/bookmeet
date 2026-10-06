@@ -109,6 +109,7 @@ export default function Home() {
       <section className="home-hero" aria-label={t("Get started")}>
         <section className="panel start-panel" aria-labelledby="create-heading">
           <h1 id="create-heading">{t("Create a booking page")}</h1>
+          <p className="panel-copy">{t("Booking confirmations and cancellations go to this address.")}</p>
           <form className="form-stack" onSubmit={handleCreateWorkspace}>
             <label className="field">
               <span>{t("Organizer email")}</span>
@@ -121,7 +122,6 @@ export default function Home() {
                 value={organizerEmail}
                 onChange={(event) => setOrganizerEmail(event.target.value)}
               />
-              <span className="field-help">{t("Booking confirmations and cancellations go to this address.")}</span>
             </label>
             <button className="button button-primary" type="submit" disabled={creating}>
               {creating ? t("Creating page…") : t("Create booking page")}
@@ -134,31 +134,33 @@ export default function Home() {
             <section className="creation-result" aria-labelledby="workspace-ready" aria-live="polite">
               <div className="result-rule" />
               <h3 id="workspace-ready">{t("Booking page created")}</h3>
-              <div className="result-share">
-                <h4 className="result-section-title">{t("Booking link")}</h4>
-                <p className="field-help">{t("Share this link with clients.")}</p>
-                <div className="copy-row">
-                  <code className="copy-value" aria-label={t("Public booking link")}>{publicLink}</code>
-                  <button className="button button-secondary" type="button" onClick={() => void copy(publicLink, "Booking link")}>
-                    {t("Copy link")}
-                  </button>
-                </div>
-              </div>
-              <div className="workspace-details">
-                <h4 className="result-section-title">{t("Management key")}</h4>
-                <div className="field">
-                  <span>{t("Keep this key private")}</span>
+              <div className="creation-options">
+                <div className="result-option">
+                  <h4 className="result-section-title">{t("Booking link")}</h4>
+                  <p className="field-help">{t("Share this link with clients.")}</p>
                   <div className="copy-row">
-                    <code className="copy-value" aria-label={t("Management key")}>{workspace.managementKey}</code>
-                    <button className="button button-secondary" type="button" onClick={() => void copy(workspace.managementKey, "Management key")}>
-                      {t("Copy key")}
+                    <code className="copy-value" aria-label={t("Public booking link")}>{publicLink}</code>
+                    <button className="button button-secondary" type="button" onClick={() => void copy(publicLink, "Booking link")}>
+                      {t("Copy link")}
                     </button>
                   </div>
-                  <p className="field-help">
-                    {workspace.keySaved
-                      ? t("Saved on this device. A copy will be emailed to you. Keep the email as backup; if both copies are lost, the key cannot be recovered.")
-                      : t("Not saved here. Copy it now. A copy will be emailed to you. Keep the email as backup; if both copies are lost, the key cannot be recovered.")}
-                  </p>
+                </div>
+                <div className="result-option">
+                  <h4 className="result-section-title">{t("Management key")}</h4>
+                  <div className="field">
+                    <span>{t("Keep this key private")}</span>
+                    <div className="copy-row">
+                      <code className="copy-value" aria-label={t("Management key")}>{workspace.managementKey}</code>
+                      <button className="button button-secondary" type="button" onClick={() => void copy(workspace.managementKey, "Management key")}>
+                        {t("Copy key")}
+                      </button>
+                    </div>
+                    <p className="field-help">
+                      {workspace.keySaved
+                        ? t("Saved on this device. A copy will be emailed to you. Keep the email as backup; if both copies are lost, the key cannot be recovered.")
+                        : t("Not saved here. Copy it now. A copy will be emailed to you. Keep the email as backup; if both copies are lost, the key cannot be recovered.")}
+                    </p>
+                  </div>
                 </div>
               </div>
               <div className="form-actions">
