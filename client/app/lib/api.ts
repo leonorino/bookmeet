@@ -187,11 +187,8 @@ export const api = {
     });
   },
 
-  cancelClientBooking(
-    bookingId: string,
-    cancellationCredential: string,
-  ): Promise<{ booking: Booking }> {
-    return request(`/v1/public/bookings/${idPathSegment(bookingId)}/cancellation`, {
+  cancelClientBooking(cancellationCredential: string): Promise<{ booking: Booking }> {
+    return request(`/v1/public/bookings/cancellation`, {
       method: "POST",
       headers: { "X-Cancellation-Credential": cancellationCredential },
     });

@@ -25,7 +25,7 @@ paths:
   /v1/organizers:
     post:
       operationId: createOrganizer
-      description: Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response. organizerEmail receives booking confirmation and cancellation notifications.
+      description: Creates an empty organizer workspace. Anyone may create one. The response includes the organizer ID and management key, and the service also emails both to organizerEmail for later access. There is no key recovery endpoint. organizerEmail receives booking confirmation and cancellation notifications. Temporary hold credentials and SMTP configuration credentials are never emailed.
       parameters: []
       responses:
         '201':
@@ -336,9 +336,47 @@ paths:
                 $ref: '#/components/schemas/InternalError'
       security:
         - BearerAuth: []
+  /v1/public/bookings/cancellation:
+    post:
+      operationId: cancelBookingWithCredential
+      description: Cancels the booking identified by the unique X-Cancellation-Credential. Missing and unmatched credentials both return CANCELLATION_CREDENTIAL_INVALID.
+      parameters:
+        - $ref: '#/components/parameters/ClientCancellationRequest'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationResponse'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateConflict'
+        '422':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationTooLate'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
   /v1/public/bookings/{bookingId}/cancellation:
     post:
       operationId: cancelBookingAsClient
+      description: Legacy compatibility operation. Cancels a booking by ID after validating X-Cancellation-Credential.
       parameters:
         - name: bookingId
           in: path
@@ -386,7 +424,7 @@ paths:
   /v1/public/holds/{holdId}/confirmation:
     post:
       operationId: confirmHold
-      description: Confirms a booking and subscribes clientEmail to updates for this booking. The organizer and client receive confirmation and later cancellation notifications.
+      description: Confirms a booking and subscribes clientEmail to updates for this booking. The response includes the booking ID and cancellation credential, and the service also emails both to clientEmail for later access. The organizer and client receive confirmation and later cancellation notifications; if both addresses match, the client email includes the cancellation details. Temporary hold credentials and SMTP configuration credentials are never emailed.
       parameters:
         - name: holdId
           in: path
@@ -862,7 +900,7 @@ components:
           type: string
         managementKey:
           type: string
-          description: Cryptographically random 256-bit management key; returned only when this organizer is created.
+          description: Cryptographically random 256-bit management key; returned when this organizer is created and also emailed with the organizer ID.
     OrganizerIdentityResponse:
       type: object
       required:

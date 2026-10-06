@@ -27,8 +27,8 @@ The service gives the organizer a single place to offer meeting times and gives 
 ### Organizer creates a booking page
 
 1. The organizer creates a workspace without registering an account.
-2. The service returns an organizer-specific management key once. The organizer keeps it private; it is not part of the public booking link.
-3. The organizer uses the key to manage slots and bookings for that workspace, including viewing client email addresses. If the key is lost, there is no recovery flow; the organizer creates a new workspace. If the key is exposed, the old workspace is compromised because the initial service has no key revocation flow.
+2. The service returns an organizer-specific management key once and emails the organizer ID and key to the organizer's notification address. The organizer keeps the key private; it is not part of the public booking link. There is no key recovery endpoint.
+3. The organizer uses the key to manage slots and bookings for that workspace, including viewing client email addresses. If the local key copy is lost, the organizer can use the creation email; if both the local key and that email copy are lost, there is no recovery endpoint and the organizer must create a new workspace. If the key is exposed, the old workspace is compromised because the initial service has no key revocation flow.
 4. The organizer shares the public booking link, which identifies the workspace but does not grant management access.
 
 ### Main flow: client books an offered meeting slot
@@ -39,7 +39,7 @@ The service gives the organizer a single place to offer meeting times and gives 
 4. The client selects a slot. If it is still available, the service immediately places a temporary hold on it, hides it from other clients, and returns a private credential for confirming that hold.
 5. The client enters an email address and confirms the booking within one minute by presenting the hold credential.
 6. The service converts the hold into a confirmed booking.
-7. The service records email notifications for the client and organizer. Delivery happens after the booking is committed and can be retried if it fails.
+7. The service records email notifications for the client and organizer. The client email includes the booking ID and cancellation credential for later access. Delivery happens after the booking is committed and can be retried if it fails. If the organizer and client use the same address, the client email includes the cancellation details.
 
 ### Slot was taken meanwhile
 
@@ -55,7 +55,7 @@ The organizer may remove an unbooked slot. It no longer appears as available to 
 
 ### Confirmation email cannot be delivered
 
-The booking result should make clear whether the slot was successfully reserved. Email notifications contain the date, time, and duration. Booking state is committed independently of email delivery, and a failed email attempt is retried without creating a second logical notification. Email delivery failure must not silently create uncertainty about whether the reservation succeeded.
+The booking result should make clear whether the slot was successfully reserved. Email notifications contain the date, time, and duration; the client confirmation also includes the booking ID and cancellation credential. Booking state is committed independently of email delivery, and a failed email attempt is retried without creating a second logical notification. Email delivery failure must not silently create uncertainty about whether the reservation succeeded.
 
 ## 5. Borders
 
@@ -63,12 +63,14 @@ The booking result should make clear whether the slot was successfully reserved.
 
 - Organizer marks individual meeting slots available within the service and shares a reusable, organizer-specific booking link.
 - Organizer creates an organizer workspace without creating an account. The service returns a public organizer ID and a separate private management key that controls that organizer's slots and bookings. See [ADR-0008](../adr/0008-organizer-management-keys.md) for the key's lifecycle and API handling.
-- The management key is shown only when the organizer is created. There is no password, login session, key recovery, key rotation, or key transfer in the initial service; an organizer who loses the key must create a new workspace, and an exposed key compromises its workspace.
+- The management key is shown when the organizer is created and emailed with the organizer ID. There is no password, login session, key recovery endpoint, key rotation, or key transfer in the initial service; an organizer who loses both the local key and creation email copy must create a new workspace, and an exposed key compromises its workspace.
 - Client views offered slots, chooses one, provides an email address, and confirms without registering.
 - Selecting a slot immediately places a temporary hold for up to one minute. Confirmation converts the hold to a booking; expiry releases it.
 - Each confirmed slot can have only one booking.
-- Client and organizer receive booking confirmation and cancellation email notifications. The only meeting details included for now are date, time, and duration.
+- A client can cancel using only the cancellation credential from the confirmation; booking ID is not required. Cancellation is allowed only at least 24 hours before the meeting.
+- Client and organizer receive booking confirmation and cancellation email notifications. The client confirmation includes the booking ID and cancellation credential; if both roles use one address, that email includes the cancellation details. The organizer creation email contains the organizer ID and management key. Temporary hold credentials and SMTP configuration credentials are never emailed. The only meeting details included for now are date, time, and duration.
 - Availability and displayed times include an explicit time zone. Slot start and end are stored as UTC instants alongside the organizer's IANA time-zone identifier.
+- The client interface supports English and Russian across the home, organizer, booking, and cancellation screens. On first visit it selects the first supported browser language preference, falling back to English; a manual choice is saved on the device and takes precedence on later visits. If persistent device storage is unavailable, keep the choice for the current browser session. The selected language updates visible copy, accessibility labels, document language and metadata, and date/time formatting (`en-US` or `ru-RU`). Dates and times continue to use each meeting's IANA time zone; language selection does not change slot instants or time zones. Emails remain in English.
 - Bookings are for single meetings; recurring meetings are out of scope.
 
 ### Out of scope for the initial service

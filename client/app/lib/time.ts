@@ -44,7 +44,7 @@ function dateOrder(locale: string): string[] {
     .map((part) => part.type);
 }
 
-export function getDateInputHint(locale = Intl.DateTimeFormat().resolvedOptions().locale): string {
+export function getDateInputHint(locale: string): string {
   const sample = new Intl.DateTimeFormat(locale, { calendar: "gregory", year: "numeric", month: "2-digit", day: "2-digit" })
     .formatToParts(new Date(2026, 10, 22));
   const datePart = (part: Intl.DateTimeFormatPart) => part.type === "year" || part.type === "month" || part.type === "day";
@@ -61,7 +61,7 @@ export function getDateInputHint(locale = Intl.DateTimeFormat().resolvedOptions(
   }).join("");
 }
 
-export function parseLocalizedDate(value: string, locale = Intl.DateTimeFormat().resolvedOptions().locale): string {
+export function parseLocalizedDate(value: string, locale: string): string {
   const fields = value.trim().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (fields.length !== 3) throw new LocalDateTimeError("invalid", `Enter the date as ${getDateInputHint(locale)}.`);
   const normalized = fields.map((field) => normalizeDigits(field, locale));
@@ -79,7 +79,7 @@ export function parseLocalizedDate(value: string, locale = Intl.DateTimeFormat()
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-export function getTimeInputHint(locale = Intl.DateTimeFormat().resolvedOptions().locale): string {
+export function getTimeInputHint(locale: string): string {
   const formatter = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" });
   const hourCycle = formatter.resolvedOptions().hourCycle;
   const twelveHour = hourCycle === "h11" || hourCycle === "h12";
@@ -96,7 +96,7 @@ export function getTimeInputHint(locale = Intl.DateTimeFormat().resolvedOptions(
   }).join("");
 }
 
-export function parseLocalizedTime(value: string, locale = Intl.DateTimeFormat().resolvedOptions().locale): string {
+export function parseLocalizedTime(value: string, locale: string): string {
   const formatter = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" });
   const cycle = formatter.resolvedOptions().hourCycle;
   const is12Hour = cycle === "h11" || cycle === "h12";
@@ -244,8 +244,8 @@ export function getTimeZones(): string[] {
   return [...new Set(["UTC", getBrowserTimeZone(), ...values])].sort((a, b) => a.localeCompare(b));
 }
 
-function timeFormatter(timeZone: string): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat(undefined, {
+function timeFormatter(timeZone: string, locale: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
     timeZone,
@@ -253,10 +253,10 @@ function timeFormatter(timeZone: string): Intl.DateTimeFormat {
   });
 }
 
-export function formatSlot(slot: Slot): FormattedSlot {
+export function formatSlot(slot: Slot, locale: string): FormattedSlot {
   const start = new Date(slot.startAt);
   const end = new Date(slot.endAt);
-  const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -269,7 +269,7 @@ export function formatSlot(slot: Slot): FormattedSlot {
 
   return {
     date,
-    timeRange: `${timeFormatter(slot.timeZone).format(start)} – ${timeFormatter(slot.timeZone).format(end)}`,
+    timeRange: `${timeFormatter(slot.timeZone, locale).format(start)} – ${timeFormatter(slot.timeZone, locale).format(end)}`,
     timeZone: slot.timeZone,
     durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
   };

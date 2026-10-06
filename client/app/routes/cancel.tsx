@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { ApiError, api } from "../lib/api";
+import { LanguageSwitcher, useI18n } from "../lib/i18n";
 
 export default function Cancel() {
-  const [bookingId, setBookingId] = useState("");
+  const { t } = useI18n();
   const [credential, setCredential] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -15,7 +16,7 @@ export default function Cancel() {
     setError("");
     setCancelled(false);
     try {
-      await api.cancelClientBooking(bookingId.trim(), credential.trim());
+      await api.cancelClientBooking(credential.trim());
       setCancelled(true);
     } catch (cause) {
       if (cause instanceof ApiError) {
@@ -25,7 +26,7 @@ export default function Cancel() {
         } else if (code.includes("late") || code.includes("too_late") || code.includes("cancellation_window")) {
           setError("This booking is too close to its start time to cancel online. Contact the organizer for help.");
         } else if (cause.status === 401 || cause.status === 403 || code.includes("credential") || code.includes("not_found")) {
-          setError("The booking ID or cancellation credential is invalid. Check both values and try again.");
+          setError("The cancellation credential is invalid. Check it and try again.");
         } else {
           setError(cause.message);
         }
@@ -39,10 +40,10 @@ export default function Cancel() {
 
   return (
     <main className="page-shell">
-      <header className="site-header"><Link className="wordmark" to="/">Meeting Booking</Link><nav className="main-nav" aria-label="Main navigation"><Link to="/">Home</Link></nav></header>
-      <section className="page-heading"><p className="eyebrow">Booking help</p><h1>Cancel a booking</h1><p>Enter the booking ID and cancellation credential from your confirmation.</p></section>
-      {error && <p className="notice notice-error" role="alert">{error}</p>}
-      {cancelled ? <section className="panel" aria-live="polite"><p className="notice notice-success" role="status">Your booking has been cancelled. A cancellation confirmation email will be sent to the address associated with the booking.</p><Link to="/" className="button button-secondary">Return home</Link></section> : <section className="panel" aria-labelledby="cancel-form-heading"><h2 id="cancel-form-heading">Cancellation details</h2><form className="form-stack" onSubmit={submit}><label className="field"><span>Booking ID</span><input autoComplete="off" required value={bookingId} onChange={(event) => setBookingId(event.target.value)} /></label><label className="field"><span>Cancellation credential</span><input type="password" autoComplete="off" required value={credential} onChange={(event) => setCredential(event.target.value)} /></label><button className="button button-primary" type="submit" disabled={busy}>{busy ? "Cancelling…" : "Cancel booking"}</button></form></section>}
+      <header className="site-header"><Link className="wordmark" to="/">{t("Meeting Booking")}</Link><nav className="main-nav" aria-label={t("Main navigation")}><Link to="/">{t("Home")}</Link><LanguageSwitcher /></nav></header>
+      <section className="page-heading"><p className="eyebrow">{t("Booking help")}</p><h1>{t("Cancel a booking")}</h1><p>{t("Enter the cancellation credential from your confirmation.")}</p></section>
+      {error && <p className="notice notice-error" role="alert">{t(error)}</p>}
+      {cancelled ? <section className="panel" aria-live="polite"><p className="notice notice-success" role="status">{t("Your booking has been cancelled. A cancellation confirmation email will be sent to the address associated with the booking.")}</p><Link to="/" className="button button-secondary">{t("Return home")}</Link></section> : <section className="panel" aria-labelledby="cancel-form-heading"><h2 id="cancel-form-heading">{t("Cancellation details")}</h2><form className="form-stack" onSubmit={submit}><label className="field"><span>{t("Cancellation credential")}</span><input type="password" autoComplete="off" required value={credential} onChange={(event) => setCredential(event.target.value)} /></label><button className="button button-primary" type="submit" disabled={busy}>{busy ? t("Cancelling…") : t("Cancel booking")}</button></form></section>}
     </main>
   );
 }

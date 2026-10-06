@@ -84,7 +84,7 @@ export class OutboxWorker {
     for (;;) {
       const message = this.database.prepare(`
         SELECT current.notification_id, current.recipient_email AS to_address, current.subject,
-          current.text_body AS text, current.attempts
+          current.text_body AS text, current.attempts, current.contains_credentials
         FROM notification_outbox AS current
         WHERE current.status = 'pending' AND current.available_at <= ?
           AND (
@@ -111,7 +111,8 @@ export class OutboxWorker {
         await this.sender.send(outgoing);
         this.database.prepare(`
           UPDATE notification_outbox
-          SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = NULL
+          SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = NULL,
+            text_body = CASE WHEN contains_credentials = 1 THEN '' ELSE text_body END
           WHERE notification_id = ? AND status = 'pending'
         `).run(this.now(), message.notification_id);
       } catch (error) {

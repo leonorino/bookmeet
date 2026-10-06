@@ -46,7 +46,7 @@ model CreateOrganizerRequest {
 model OrganizerCreatedResponse {
   @statusCode statusCode: 201;
   organizerId: string;
-  /** Cryptographically random 256-bit management key; returned only when this organizer is created. */
+  /** Cryptographically random 256-bit management key; returned when this organizer is created and also emailed with the organizer ID. */
   managementKey: string;
 }
 
@@ -139,7 +139,7 @@ model ClientCancellationRequest {
 op health(): HealthResponse | InternalError;
 
 @route("/v1/organizers") @post
-@doc("Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response. organizerEmail receives booking confirmation and cancellation notifications.")
+@doc("Creates an empty organizer workspace. Anyone may create one. The response includes the organizer ID and management key, and the service also emails both to organizerEmail for later access. There is no key recovery endpoint. organizerEmail receives booking confirmation and cancellation notifications. Temporary hold credentials and SMTP configuration credentials are never emailed.")
 op createOrganizer(@body request: CreateOrganizerRequest): OrganizerCreatedResponse | InvalidRequest | InternalError;
 
 @useAuth(BearerAuth)
@@ -155,11 +155,16 @@ op getPublicAvailability(@path organizerId: string): AvailabilityResponse | Reso
 op createHold(@path organizerId: string, @body request: CreateHoldRequest): HoldResponse | InvalidRequest | ResourceNotFound | StateConflict | InternalError;
 
 @route("/v1/public/holds/{holdId}/confirmation") @post
-@doc("Confirms a booking and subscribes clientEmail to updates for this booking. The organizer and client receive confirmation and later cancellation notifications.")
+@doc("Confirms a booking and subscribes clientEmail to updates for this booking. The response includes the booking ID and cancellation credential, and the service also emails both to clientEmail for later access. The organizer and client receive confirmation and later cancellation notifications; if both addresses match, the client email includes the cancellation details. Temporary hold credentials and SMTP configuration credentials are never emailed.")
 op confirmHold(@path holdId: string, @body request: ConfirmBookingRequest): BookingResponse | InvalidRequest | Unauthenticated | ResourceNotFound | StateConflict | HoldExpired | InternalError;
 
+@doc("Legacy compatibility operation. Cancels a booking by ID after validating X-Cancellation-Credential.")
 @route("/v1/public/bookings/{bookingId}/cancellation") @post
 op cancelBookingAsClient(@path bookingId: string, ...ClientCancellationRequest): CancellationResponse | Unauthenticated | ResourceNotFound | StateConflict | CancellationTooLate | InternalError;
+
+@doc("Cancels the booking identified by the unique X-Cancellation-Credential. Missing and unmatched credentials both return CANCELLATION_CREDENTIAL_INVALID.")
+@route("/v1/public/bookings/cancellation") @post
+op cancelBookingWithCredential(...ClientCancellationRequest): CancellationResponse | Unauthenticated | StateConflict | CancellationTooLate | InternalError;
 
 @useAuth(BearerAuth)
 @doc("Requires the bearer management key scoped to this organizer ID.")

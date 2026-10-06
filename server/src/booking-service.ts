@@ -88,10 +88,21 @@ export class BookingService {
   createOrganizer(organizerEmail: string): { organizerId: string; managementKey: string } {
     const organizerId = randomUUID();
     const managementKey = randomBytes(32).toString('base64url');
-    this.database.prepare(`
-      INSERT INTO organizers (organizer_id, organizer_email, management_key_hash, created_at)
-      VALUES (?, ?, ?, ?)
-    `).run(organizerId, organizerEmail, digest(managementKey), this.now());
+    const now = this.now();
+    this.database.transaction(() => {
+      this.database.prepare(`
+        INSERT INTO organizers (organizer_id, organizer_email, management_key_hash, created_at)
+        VALUES (?, ?, ?, ?)
+      `).run(organizerId, organizerEmail, digest(managementKey), now);
+      this.database.prepare(`
+        INSERT INTO notification_outbox (
+          notification_id, event_id, aggregate_id, sequence_number, recipient_email, subject, text_body,
+          contains_credentials, status, attempts, available_at, created_at
+        ) VALUES (?, ?, ?, 0, ?, ?, ?, 1, 'pending', 0, ?, ?)
+      `).run(randomUUID(), `organizer:${organizerId}:created`, organizerId, organizerEmail,
+        'Your meeting booking organizer access',
+        `Your organizer workspace is ready.\n\nOrganizer ID: ${organizerId}\nManagement key: ${managementKey}\n\nKeep this email to access your organizer workspace later.`, now, now);
+    }).immediate();
 
     return { organizerId, managementKey };
   }
@@ -256,7 +267,7 @@ export class BookingService {
         status: 'confirmed',
         createdAt: new Date(now).toISOString(),
       };
-      enqueueBookingEmail(this.database, bookingId, `booking:${bookingId}:confirmed`, slot.organizer_email, clientEmail, slot, 'confirmed', now);
+      enqueueBookingEmail(this.database, bookingId, `booking:${bookingId}:confirmed`, slot.organizer_email, clientEmail, slot, 'confirmed', now, cancellationCredential);
       return { value: details };
     }).immediate();
 
@@ -285,6 +296,39 @@ export class BookingService {
       `).run(now, bookingId);
       enqueueBookingEmail(this.database, bookingId, `booking:${bookingId}:cancelled`, booking.organizer_email, booking.client_email, booking, 'cancelled', now);
 
+      return { value: toClientBookingDetails(booking, cancellationCredential, 'cancelled') };
+    }).immediate();
+
+    if ('error' in result) throw result.error;
+    return result.value;
+  }
+
+  cancelWithCredential(cancellationCredential: string | undefined): BookingDetails {
+    const now = this.now();
+    const result = this.database.transaction((): Result<BookingDetails> => {
+      if (!cancellationCredential) {
+        return { error: new ApiError(401, 'CANCELLATION_CREDENTIAL_INVALID', 'The cancellation credential is invalid.') };
+      }
+      const booking = this.database.prepare(`
+        SELECT b.*, s.organizer_id, s.start_at, s.end_at, s.time_zone, o.organizer_email
+        FROM bookings b
+        JOIN slots s ON s.slot_id = b.slot_id
+        JOIN organizers o ON o.organizer_id = s.organizer_id
+        WHERE b.cancellation_credential_hash = ?
+      `).get(digest(cancellationCredential)) as BookingRow | undefined;
+      if (!booking || !credentialMatches(booking.cancellation_credential_hash, cancellationCredential)) {
+        return { error: new ApiError(401, 'CANCELLATION_CREDENTIAL_INVALID', 'The cancellation credential is invalid.') };
+      }
+      if (booking.status === 'cancelled') {
+        return { error: new ApiError(409, 'BOOKING_ALREADY_CANCELLED', 'The booking has already been cancelled.') };
+      }
+      const cutoffError = cancellationCutoffError(booking.start_at, now);
+      if (cutoffError) return { error: cutoffError };
+
+      this.database.prepare(`
+        UPDATE bookings SET status = 'cancelled', cancelled_at = ? WHERE booking_id = ?
+      `).run(now, booking.booking_id);
+      enqueueBookingEmail(this.database, booking.booking_id, `booking:${booking.booking_id}:cancelled`, booking.organizer_email, booking.client_email, booking, 'cancelled', now);
       return { value: toClientBookingDetails(booking, cancellationCredential, 'cancelled') };
     }).immediate();
 
@@ -507,6 +551,7 @@ function enqueueBookingEmail(
   slot: Pick<SlotRow, 'start_at' | 'end_at' | 'time_zone'>,
   status: 'confirmed' | 'cancelled',
   now: number,
+  cancellationCredential?: string,
 ): void {
   const eventText = status === 'confirmed' ? 'confirmed' : 'cancelled';
   const subject = status === 'confirmed' ? 'Meeting booking confirmed' : 'Meeting booking cancelled';
@@ -520,19 +565,23 @@ function enqueueBookingEmail(
     timeZone: slot.time_zone,
   }).format(new Date(slot.end_at));
   const durationMinutes = Math.round((slot.end_at - slot.start_at) / 60_000);
-  const textBody = `The meeting has been ${eventText}.\n\nDate and time: ${start}–${end} (${slot.time_zone})\nDuration: ${durationMinutes} minutes.`;
+  const commonText = `The meeting has been ${eventText}.\n\nDate and time: ${start}–${end} (${slot.time_zone})\nDuration: ${durationMinutes} minutes.`;
   const sequenceNumber = status === 'confirmed' ? 1 : 2;
-  const recipients = new Map<string, string>();
-  recipients.set(organizerEmail.toLowerCase(), organizerEmail);
-  recipients.set(clientEmail.toLowerCase(), clientEmail);
+  const sharedAddress = organizerEmail.toLowerCase() === clientEmail.toLowerCase();
+  const recipients = sharedAddress
+    ? [{ email: clientEmail, text: `${commonText}${cancellationCredential ? `\n\nBooking ID: ${bookingId}\nCancellation credential: ${cancellationCredential}` : ''}`, containsCredentials: Boolean(cancellationCredential) }]
+    : [
+      { email: organizerEmail, text: commonText, containsCredentials: false },
+      { email: clientEmail, text: `${commonText}${cancellationCredential ? `\n\nBooking ID: ${bookingId}\nCancellation credential: ${cancellationCredential}` : ''}`, containsCredentials: Boolean(cancellationCredential) },
+    ];
 
   const insert = database.prepare(`
     INSERT OR IGNORE INTO notification_outbox (
       notification_id, event_id, aggregate_id, sequence_number, recipient_email, subject, text_body,
-      status, attempts, available_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+      contains_credentials, status, attempts, available_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
   `);
-  for (const recipient of recipients.values()) {
-    insert.run(randomUUID(), eventId, bookingId, sequenceNumber, recipient, subject, textBody, now, now);
+  for (const recipient of recipients) {
+    insert.run(randomUUID(), eventId, bookingId, sequenceNumber, recipient.email, subject, recipient.text, Number(recipient.containsCredentials), now, now);
   }
 }

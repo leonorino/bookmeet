@@ -1,6 +1,6 @@
 # Client
 
-The client is a TypeScript React application built with React Router framework mode and SPA output. Organizers can create a workspace, publish and manage meeting slots, review bookings, and cancel bookings. Clients can view a public organizer page, reserve a slot, confirm with an email address, and cancel using their booking ID and cancellation credential.
+The client is a TypeScript React application built with React Router framework mode and SPA output. Organizers can create a workspace, publish and manage meeting slots, review bookings, and cancel bookings. Clients can view a public organizer page, reserve a slot, confirm with an email address, and cancel using only the cancellation credential from their confirmation.
 
 Booking rules, slot reservation, persistence, and notifications belong to the separate server. The browser bundle must not contain credentials or API secrets. Organizer management keys are credentials entered by the organizer; when a workspace is created, the client stores its key in local storage on that device and shows it once for copying. The key is never placed in a URL. Use “Forget this device” on the management page to remove a saved key.
 

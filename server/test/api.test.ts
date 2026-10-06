@@ -108,8 +108,8 @@ async function readOutbox(databasePath: string) {
   const database = new Database(databasePath, { readonly: true });
   try {
     return database.prepare(`
-      SELECT event_id, recipient_email, status, attempts, available_at FROM notification_outbox ORDER BY event_id, recipient_email
-    `).all() as Array<{ event_id: string; recipient_email: string; status: string; attempts: number; available_at: number }>;
+      SELECT event_id, recipient_email, subject, text_body, contains_credentials, status, attempts, available_at FROM notification_outbox ORDER BY event_id, recipient_email
+    `).all() as Array<{ event_id: string; recipient_email: string; subject: string; text_body: string; contains_credentials: number; status: string; attempts: number; available_at: number }>;
   } finally {
     database.close();
   }
@@ -157,6 +157,15 @@ describe('Meeting Slot Booking API', () => {
     const storedHash = database.prepare(`SELECT management_key_hash FROM organizers WHERE organizer_id = ?`)
       .get(organizer.organizerId) as { management_key_hash: string };
     expect(storedHash.management_key_hash).not.toBe(organizer.managementKey);
+    const credentialEmail = new Database(harness.databasePath, { readonly: true });
+    try {
+      const row = credentialEmail.prepare(`SELECT recipient_email, text_body, contains_credentials FROM notification_outbox WHERE event_id = ?`)
+        .get(`organizer:${organizer.organizerId}:created`) as { recipient_email: string; text_body: string; contains_credentials: number };
+      expect(row.recipient_email).toBe('organizer@example.com');
+      expect(row.text_body).toContain(organizer.organizerId);
+      expect(row.text_body).toContain(organizer.managementKey);
+      expect(row.contains_credentials).toBe(1);
+    } finally { credentialEmail.close(); }
     expect(storedHash.management_key_hash).toMatch(/^[a-f0-9]{64}$/);
     database.close();
   });
@@ -325,7 +334,7 @@ describe('Meeting Slot Booking API', () => {
     const reopenedHold = await createHold(harness.app, organizer.organizerId, slot.slotId);
     expect(reopenedHold.statusCode).toBe(201);
 
-    const outbox = await readOutbox(harness.databasePath);
+    const outbox = (await readOutbox(harness.databasePath)).filter((row) => row.event_id.startsWith('booking:'));
     expect(outbox).toHaveLength(4);
     expect(outbox.map((row) => row.recipient_email).sort()).toEqual([
       'client@example.com', 'client@example.com',
@@ -371,6 +380,27 @@ describe('Meeting Slot Booking API', () => {
     });
     expect(afterMeetingStart.statusCode).toBe(409);
     expect(afterMeetingStart.json().error.code).toBe('SLOT_UNAVAILABLE');
+  });
+
+  it('combines shared-address confirmation content using the client address spelling', async () => {
+    const harness = trackHarness();
+    const organizer = await createOrganizer(harness.app, 'Same@example.com');
+    const slot = await createSlot(harness.app, organizer);
+    const hold = (await createHold(harness.app, organizer.organizerId, slot.slotId)).json<HoldResult>().hold;
+    const confirmation = await harness.app.inject({
+      method: 'POST', url: `/v1/public/holds/${hold.holdId}/confirmation`,
+      payload: { holdCredential: hold.holdCredential, clientEmail: 'same@EXAMPLE.com' },
+    });
+    const booking = confirmation.json<BookingResult>().booking;
+    const database = new Database(harness.databasePath, { readonly: true });
+    try {
+      const rows = database.prepare(`SELECT recipient_email, text_body FROM notification_outbox WHERE event_id = ?`)
+        .all(`booking:${booking.bookingId}:confirmed`) as Array<{ recipient_email: string; text_body: string }>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].recipient_email).toBe('same@EXAMPLE.com');
+      expect(rows[0].text_body).toContain(booking.bookingId);
+      expect(rows[0].text_body).toContain(booking.cancellationCredential);
+    } finally { database.close(); }
   });
 
   it('enforces the cancellation cutoff at the exact 24-hour boundary', async () => {
@@ -456,12 +486,17 @@ describe('Meeting Slot Booking API', () => {
     try {
       const failingWorker = new OutboxWorker(database, failingSender, harness.now);
       await failingWorker.drain();
-      expect(attempted).toHaveLength(2);
+      expect(attempted).toHaveLength(3);
 
       const outbox = await readOutbox(harness.databasePath);
-      expect(outbox).toHaveLength(2);
+      expect(outbox).toHaveLength(3);
       expect(outbox.every((row) => row.status === 'pending' && row.attempts === 1)).toBe(true);
       expect(outbox.every((row) => row.available_at === harness.now() + 60_000)).toBe(true);
+      const clientConfirmation = outbox.find((row) => row.event_id.endsWith(':confirmed') && row.recipient_email === 'client@example.com')!;
+      const organizerConfirmation = outbox.find((row) => row.event_id.endsWith(':confirmed') && row.recipient_email === 'organizer@example.com')!;
+      expect(clientConfirmation.text_body).toContain(booking.bookingId);
+      expect(clientConfirmation.text_body).toContain(booking.cancellationCredential);
+      expect(organizerConfirmation.text_body).not.toContain(booking.cancellationCredential);
 
       const organizerBookings = await harness.app.inject({
         method: 'GET',
@@ -484,16 +519,25 @@ describe('Meeting Slot Booking API', () => {
         async send(message) { delivered.push(message); },
       }, harness.now);
       await successfulWorker.drain();
-      expect(delivered).toHaveLength(4);
+      expect(delivered).toHaveLength(5);
+      const organizerAccessEmail = delivered.find((message) => message.subject === 'Your meeting booking organizer access');
+      expect(organizerAccessEmail?.to).toBe('organizer@example.com');
+      expect(organizerAccessEmail?.text).toContain(organizer.organizerId);
+      expect(organizerAccessEmail?.text).toContain(organizer.managementKey);
       for (const recipient of new Set(delivered.map((message) => message.to))) {
-        expect(delivered.filter((message) => message.to === recipient).map((message) => message.subject)).toEqual([
-          'Meeting booking confirmed',
-          'Meeting booking cancelled',
-        ]);
+        const subjects = delivered.filter((message) => message.to === recipient).map((message) => message.subject);
+        expect(subjects).toContain('Meeting booking confirmed');
+        expect(subjects).toContain('Meeting booking cancelled');
       }
-      expect(delivered.every((message) => message.text.includes('Europe/Paris'))).toBe(true);
+      expect(delivered.filter((message) => message.subject.startsWith('Meeting booking')).every((message) => message.text.includes('Europe/Paris'))).toBe(true);
+      const sentCredentialRows = new Database(harness.databasePath, { readonly: true });
+      try {
+        const cleared = sentCredentialRows.prepare(`SELECT text_body FROM notification_outbox WHERE contains_credentials = 1 AND status = 'sent'`).all() as Array<{ text_body: string }>;
+        expect(cleared.length).toBeGreaterThan(0);
+        expect(cleared.every((row) => row.text_body === '')).toBe(true);
+      } finally { sentCredentialRows.close(); }
       const sentOutbox = await readOutbox(harness.databasePath);
-      expect(sentOutbox).toHaveLength(4);
+      expect(sentOutbox.filter((row) => row.event_id.startsWith('booking:'))).toHaveLength(4);
       expect(sentOutbox.filter((row) => row.event_id.endsWith(':confirmed')).every((row) => row.status === 'sent' && row.attempts === 2)).toBe(true);
       expect(sentOutbox.filter((row) => row.event_id.endsWith(':cancelled')).every((row) => row.status === 'sent' && row.attempts === 1)).toBe(true);
     } finally {
@@ -567,7 +611,10 @@ describe('Meeting Slot Booking API', () => {
         'Meeting booking confirmed',
         'Meeting booking cancelled',
       ]);
-      expect(database.pragma('user_version', { simple: true })).toBe(2);
+      expect(database.pragma('user_version', { simple: true })).toBe(3);
+      expect((database.prepare(`SELECT contains_credentials FROM notification_outbox WHERE notification_id = 'z-confirmation'`).get() as { contains_credentials: number }).contains_credentials).toBe(0);
+      expect((database.prepare(`SELECT text_body FROM notification_outbox WHERE notification_id = 'z-confirmation'`).get() as { text_body: string }).text_body)
+        .toBe('The meeting has been confirmed.');
     } finally {
       database.close();
       rmSync(directory, { recursive: true, force: true });

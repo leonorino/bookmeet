@@ -107,6 +107,7 @@ export function buildApp(options: AppOptions = {}) {
     },
   }, async (request, reply) => {
     const organizer = service.createOrganizer(request.body.organizerEmail);
+    outboxWorker?.kick();
     return reply.code(201).send(organizer);
   });
 
@@ -196,6 +197,24 @@ export function buildApp(options: AppOptions = {}) {
     const headerCredential = request.headers['x-cancellation-credential'];
     const credential = Array.isArray(headerCredential) ? headerCredential[0] : headerCredential;
     const booking = service.cancelAsClient(request.params.bookingId, credential);
+    outboxWorker?.kick();
+    return reply.code(200).send({ booking });
+  });
+
+  app.post('/v1/public/bookings/cancellation', {
+    schema: {
+      response: {
+        200: Type.Object({ booking: clientBookingSchema() }),
+        401: errorSchema(['CANCELLATION_CREDENTIAL_INVALID']),
+        409: errorSchema(['BOOKING_ALREADY_CANCELLED']),
+        422: errorSchema(['CANCELLATION_WINDOW_CLOSED']),
+        500: errorSchema(['INTERNAL_ERROR']),
+      },
+    },
+  }, async (request, reply) => {
+    const headerCredential = request.headers['x-cancellation-credential'];
+    const credential = Array.isArray(headerCredential) ? headerCredential[0] : headerCredential;
+    const booking = service.cancelWithCredential(credential);
     outboxWorker?.kick();
     return reply.code(200).send({ booking });
   });

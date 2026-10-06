@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ApiError, api, type OrganizerBooking, type OrganizerSlot } from "../lib/api";
-import { forgetManagementKey, getManagementKey, saveManagementKey } from "../lib/management-key";
-import { formatSlot, getBrowserTimeZone, getDateInputHint, getTimeInputHint, getTimeZones, parseLocalizedDate, parseLocalizedTime, resolveLocalDateTime } from "../lib/time";
+import { LanguageSwitcher, useI18n } from "../lib/i18n";
+import { getManagementKey, saveManagementKey } from "../lib/management-key";
+import { formatSlot, getBrowserTimeZone, getTimeZones, resolveLocalDateTime } from "../lib/time";
 
 function dateInZone(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
@@ -17,10 +18,14 @@ function addDays(day: string, count: number): string {
 }
 
 function getWeekDays(anchor: string, locale: string): string[] {
-  const weekInfo = typeof Intl.Locale === "undefined"
+  const localeInfo = typeof Intl.Locale === "undefined"
     ? undefined
-    : (new Intl.Locale(locale) as Intl.Locale & { weekInfo?: { firstDay: number } }).weekInfo;
-  const firstDay = weekInfo?.firstDay ?? 1;
+    : new Intl.Locale(locale) as Intl.Locale & {
+      weekInfo?: { firstDay: number };
+      getWeekInfo?: () => { firstDay: number };
+    };
+  const weekInfo = localeInfo?.weekInfo ?? localeInfo?.getWeekInfo?.();
+  const firstDay = weekInfo?.firstDay ?? (locale === "en-US" ? 7 : 1);
   const weekday = new Date(`${anchor}T12:00:00Z`).getUTCDay();
   const offset = (weekday - firstDay + 7) % 7;
   const start = addDays(anchor, -offset);
@@ -66,12 +71,21 @@ function calendarMinute(element: HTMLElement, clientY: number): number {
   return Math.max(0, Math.min(1425, raw));
 }
 
+function millisecondsToNextCalendarQuarter(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en", { timeZone, minute: "2-digit", second: "2-digit" }).formatToParts(new Date(instant));
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const minute = Number(values.minute);
+  const second = Number(values.second);
+  return (15 - (minute % 15)) * 60_000 - second * 1_000 - (instant % 1_000);
+}
+
 function managementKeyFromNavigationState(state: unknown): string {
   if (typeof state !== "object" || state === null || !("managementKey" in state)) return "";
   return typeof state.managementKey === "string" ? state.managementKey : "";
 }
 
 export default function Manage() {
+  const { locale, t } = useI18n();
   const { organizerId = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -87,17 +101,42 @@ export default function Manage() {
   const [error, setError] = useState("");
   const [keyStorageWarning, setKeyStorageWarning] = useState("");
   const [message, setMessage] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("30");
   const [timeZone, setTimeZone] = useState(() => getBrowserTimeZone());
   const [weekAnchor, setWeekAnchor] = useState(() => dateInZone(new Date(), getBrowserTimeZone()));
   const [dragStart, setDragStart] = useState<{ day: string; minute: number } | null>(null);
   const [selection, setSelection] = useState<{ day: string; minute: number; duration: number } | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const loadSequence = useRef(0);
   const timeZones = getTimeZones();
-  const locale = Intl.DateTimeFormat().resolvedOptions().locale;
   const weekDays = getWeekDays(weekAnchor, locale);
+  const durationIsValid = Number.isSafeInteger(Number(durationMinutes)) && Number(durationMinutes) > 0;
+  useEffect(() => {
+    let timer = 0;
+    function refreshBoundary() {
+      const now = Date.now();
+      setClockNow(now);
+      timer = window.setTimeout(refreshBoundary, millisecondsToNextCalendarQuarter(now, timeZone));
+    }
+    refreshBoundary();
+    return () => window.clearTimeout(timer);
+  }, [timeZone]);
+  const today = dateInZone(new Date(clockNow), timeZone);
+  function isPastStart(day: string, minute: number, now = Date.now()): boolean {
+    const localNow = new Date(now);
+    const currentDay = dateInZone(localNow, timeZone);
+    if (day < currentDay) return true;
+    if (day > currentDay) return false;
+    const currentTime = timePartsInZone(localNow.toISOString(), timeZone);
+    return minute <= currentTime.hour * 60 + currentTime.minute;
+  }
+  function pastHeight(day: string): number {
+    if (day < today) return 1440;
+    if (day > today) return 0;
+    const currentTime = timePartsInZone(new Date(clockNow).toISOString(), timeZone);
+    return Math.min(1440, (Math.floor((currentTime.hour * 60 + currentTime.minute) / 15) + 1) * 15);
+  }
+  const selectionIsPast = Boolean(selection && isPastStart(selection.day, selection.minute, clockNow));
   const selectionSlot = useMemo(() => {
     if (!selection) return null;
     try {
@@ -173,32 +212,19 @@ export default function Manage() {
     setKeyInput("");
   }
 
-  function forgetKey() {
-    forgetManagementKey(organizerId);
-    navigate(location.pathname, { replace: true, state: null });
-    setStoredKey("");
-    setKeyStorageWarning("");
-    setError("");
-    setSlots([]);
-    setBookings([]);
-    setMessage("Management key removed from this device.");
-  }
-
   async function createSlot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!key) return;
+    if (!key || !selection) return;
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      const normalizedDate = parseLocalizedDate(startDate, locale);
-      const normalizedTime = parseLocalizedTime(startTime, locale);
       const duration = Number(durationMinutes);
       if (!Number.isSafeInteger(duration) || duration < 1) {
         setError("Duration must be a positive whole number of minutes.");
         return;
       }
-      const startAt = resolveLocalDateTime(normalizedDate, normalizedTime, timeZone);
+      const startAt = resolveLocalDateTime(selection.day, calendarTimeFromMinute(selection.minute), timeZone);
       if (new Date(startAt).getTime() <= Date.now()) {
         setError("Meeting times must start in the future. Choose a later date and time.");
         return;
@@ -206,8 +232,6 @@ export default function Manage() {
       await api.createOrganizerSlot(organizerId, key, { startAt, durationMinutes: duration, timeZone });
       setMessage("Meeting time added.");
       setSelection(null);
-      setStartDate("");
-      setStartTime("");
       setDurationMinutes("30");
       await load(key);
     } catch (cause) {
@@ -218,16 +242,16 @@ export default function Manage() {
   }
 
   function selectCalendarTime(day: string, minute: number, duration: number) {
-    const hour = Math.floor(minute / 60);
-    const minutePart = minute % 60;
-    setStartDate(new Intl.DateTimeFormat(locale, { calendar: "gregory", year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`)));
-    setStartTime(new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, hour, minutePart))));
     setDurationMinutes(String(duration));
     setSelection({ day, minute, duration });
   }
 
   function calendarPointerDown(event: PointerEvent<HTMLDivElement>, day: string) {
     const minute = calendarMinute(event.currentTarget, event.clientY);
+    if (isPastStart(day, minute)) {
+      setDragStart(null);
+      return;
+    }
     setDragStart({ day, minute });
     if (event.pointerType === "touch") return;
     selectCalendarTime(day, minute, 15);
@@ -239,6 +263,7 @@ export default function Manage() {
     if (!dragStart || dragStart.day !== day) return;
     const end = calendarMinute(event.currentTarget, event.clientY);
     const start = Math.min(dragStart.minute, end);
+    if (isPastStart(day, start)) return;
     const duration = Math.max(15, end < dragStart.minute ? dragStart.minute - end + 15 : end - dragStart.minute);
     selectCalendarTime(day, start, duration);
   }
@@ -246,7 +271,7 @@ export default function Manage() {
   function calendarPointerUp(event: PointerEvent<HTMLDivElement>, day: string) {
     if (event.pointerType === "touch" && dragStart?.day === day) {
       const end = calendarMinute(event.currentTarget, event.clientY);
-      if (Math.abs(end - dragStart.minute) < 15) selectCalendarTime(day, dragStart.minute, 15);
+      if (Math.abs(end - dragStart.minute) < 15 && !isPastStart(day, dragStart.minute)) selectCalendarTime(day, dragStart.minute, 15);
     }
     setDragStart(null);
   }
@@ -258,8 +283,6 @@ export default function Manage() {
     const duration = Number(value);
     if (selection && Number.isSafeInteger(duration) && duration > 0) {
       setSelection({ ...selection, duration });
-    } else if (selection) {
-      setSelection(null);
     }
   }
 
@@ -289,52 +312,65 @@ export default function Manage() {
     }
   }
 
+  async function copyPublicLink() {
+    setError("");
+    setMessage("");
+    const publicLink = `${window.location.origin}/book/${encodeURIComponent(organizerId)}`;
+    try {
+      await navigator.clipboard.writeText(publicLink);
+      setMessage("Public booking link copied.");
+    } catch {
+      setError("Could not copy automatically. Open the public booking page and copy its URL from your browser's address bar.");
+    }
+  }
+
   return (
-    <main className="page-shell">
+    <main className={`page-shell${selection ? " has-calendar-selection" : ""}`}>
       <header className="site-header">
-        <Link className="wordmark" to="/">Meeting Booking</Link>
-        <nav className="main-nav" aria-label="Main navigation"><Link to={`/book/${encodeURIComponent(organizerId)}`}>Public booking page</Link><Link to="/cancel">Cancel a booking</Link></nav>
+        <Link className="wordmark" to="/">{t("Meeting Booking")}</Link>
+        <nav className="main-nav" aria-label={t("Main navigation")}><Link to={`/book/${encodeURIComponent(organizerId)}`}>{t("Public booking page")}</Link><Link to="/cancel">{t("Cancel a booking")}</Link><LanguageSwitcher /></nav>
       </header>
       <section className="page-heading">
-        <p className="eyebrow">Organizer workspace</p>
-        <h1>Manage your availability</h1>
-        <p>Organizer ID: <code className="mono">{organizerId}</code></p>
+        <p className="eyebrow">{t("Organizer workspace")}</p>
+        <h1>{t("Manage your availability")}</h1>
       </section>
-      {error && <p className="notice notice-error" role="alert">{error}</p>}
-      {keyStorageWarning && <p className="notice" role="status">{keyStorageWarning}</p>}
-      {message && <p className="notice notice-success" role="status">{message}</p>}
+      {error && <p className="notice notice-error" role="alert">{t(error)}</p>}
+      {keyStorageWarning && <p className="notice" role="status">{t(keyStorageWarning)}</p>}
+      {message && <p className="notice notice-success" role="status">{t(message)}</p>}
 
       {!key ? (
         <section className="panel" aria-labelledby="key-heading">
-          <h2 id="key-heading">Enter your management key</h2>
-          <p>Use the key created with this booking page. It will be saved on this device.</p>
+          <h2 id="key-heading">{t("Enter your management key")}</h2>
+          <p>{t("Use the key created with this booking page. It will be saved on this device.")}</p>
           <form className="form-stack" onSubmit={submitKey}>
-            <label className="field"><span>Management key</span><input type="password" autoComplete="current-password" required value={keyInput} onChange={(event) => setKeyInput(event.target.value)} /></label>
-            <button className="button button-primary" type="submit">Open workspace</button>
+            <label className="field"><span>{t("Management key")}</span><input type="password" autoComplete="current-password" required value={keyInput} onChange={(event) => setKeyInput(event.target.value)} /></label>
+            <button className="button button-primary" type="submit">{t("Open workspace")}</button>
           </form>
         </section>
       ) : (
         <>
-          <div className="form-actions"><button className="button button-quiet" type="button" onClick={forgetKey}>Forget this device</button>{loading && <span role="status">Loading workspace…</span>}</div>
+          <div className="form-actions workspace-actions"><button className="button button-secondary" type="button" onClick={() => void copyPublicLink()}>{t("Copy public link")}</button>{loading && <span role="status">{t("Loading workspace…")}</span>}</div>
           <div className="content-grid">
             <section className="panel calendar-panel" aria-labelledby="add-slot-heading">
-              <h2 id="add-slot-heading">Add a meeting time</h2>
+              <h2 id="add-slot-heading">{t("Add a meeting time")}</h2>
               <div className="calendar-controls">
-                <div className="calendar-navigation"><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}>Previous</button><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(dateInZone(new Date(), timeZone))}>Today</button><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}>Next</button><span className="calendar-week-range" aria-live="polite">{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${weekDays[0]}T12:00:00Z`))} – {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${weekDays[6]}T12:00:00Z`))}</span></div>
-                <label className="field"><span>Time zone</span><select required value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>{timeZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>
+                <div className="calendar-navigation"><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}>{t("Previous")}</button><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(dateInZone(new Date(), timeZone))}>{t("Today")}</button><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}>{t("Next")}</button><span className="calendar-week-range" aria-live="polite">{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${weekDays[0]}T12:00:00Z`))} – {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${weekDays[6]}T12:00:00Z`))}</span></div>
+                <label className="field"><span>{t("Time zone")}</span><select required value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>{timeZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>
               </div>
-              <p className="field-help">Drag within a day to choose a start time and duration. On touch screens, tap a time to choose a 15-minute start, then adjust the duration below.</p>
+              <p className="field-help">{t("Drag within a day to choose a start time and duration. On touch screens, tap a time to choose a 15-minute start, then adjust the duration in the action bar.")}</p>
               <div className="calendar-scroll"><div className="week-calendar">
                 <div className="calendar-corner" />{weekDays.map((day) => <div className="calendar-day-heading" key={day}><strong>{new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`))}</strong><span>{new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`))}</span></div>)}
                 <div className="calendar-hours">{Array.from({ length: 24 }, (_, index) => <span key={index}>{new Intl.DateTimeFormat(locale, { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, index)))}</span>)}</div>
-                {weekDays.map((day) => <div key={day} className="calendar-day" role="group" onPointerDown={(event) => calendarPointerDown(event, day)} onPointerMove={(event) => calendarPointerMove(event, day)} onPointerUp={(event) => calendarPointerUp(event, day)} onPointerCancel={finishCalendarDrag} aria-label={`Availability for ${new Intl.DateTimeFormat(locale, { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`))}`}>
+                {weekDays.map((day) => <div key={day} className="calendar-day" role="group" onPointerDown={(event) => calendarPointerDown(event, day)} onPointerMove={(event) => calendarPointerMove(event, day)} onPointerUp={(event) => calendarPointerUp(event, day)} onPointerCancel={finishCalendarDrag} aria-label={t("Availability for {date}", { date: new Intl.DateTimeFormat(locale, { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`)) })}>
+                  {pastHeight(day) > 0 && <div className="calendar-past" style={{ height: `${pastHeight(day)}px` }} aria-hidden="true" />}
                   {slots.map((slot) => {
                     const segment = slotSegmentForDay(slot, day, timeZone);
                     if (!segment) return null;
                     const slotLabel = segment.startsHere
                       ? new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone }).format(new Date(slot.startAt))
-                      : "Continues";
-                    return <div className={`calendar-slot status-${slot.state}`} key={slot.slotId} style={{ top: `${segment.top}px`, height: `${segment.height}px` }} title={`${formatSlot(slot).timeRange} · ${slot.state}`}>{slotLabel} · {slot.state}</div>;
+                      : t("Continues");
+                    const statusLabel = slot.state === "available" ? t("Available") : slot.state === "held" ? t("Temporarily held") : t("Booked");
+                    return <div className={`calendar-slot status-${slot.state}`} key={slot.slotId} style={{ top: `${segment.top}px`, height: `${segment.height}px` }} title={`${formatSlot(slot, locale).timeRange} · ${statusLabel}`}>{slotLabel} · {statusLabel}</div>;
                   })}
                   {selectionSlot && (() => {
                     const segment = slotSegmentForDay(selectionSlot, day, timeZone);
@@ -343,36 +379,33 @@ export default function Manage() {
                   {!selectionSlot && selection?.day === day && <div className="calendar-selection" style={{ top: `${selection.minute}px`, height: `${Math.min(selection.duration, 1440 - selection.minute)}px` }} />}
                 </div>)}
               </div></div>
-              {selection && <p className="calendar-preview" role="status">Selected: {new Intl.DateTimeFormat(locale, { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${selection.day}T12:00:00Z`))}, {new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, Math.floor(selection.minute / 60), selection.minute % 60)))} for {selection.duration} minutes ({timeZone}).</p>}
-              <form className="form-stack" onSubmit={createSlot}>
-                <details className="manual-entry"><summary>Enter date and time manually</summary><div className="form-stack manual-entry-fields">
-                  <label className="field compact-field"><span>Start date</span><input type="text" inputMode="text" autoComplete="off" placeholder={getDateInputHint()} aria-describedby="start-date-help" value={startDate} onChange={(event) => { setStartDate(event.target.value); setSelection(null); }} /><small className="field-help" id="start-date-help">Use your local date order (Gregorian year): {getDateInputHint()}.</small></label>
-                  <label className="field compact-field"><span>Start time</span><input type="text" inputMode="text" autoComplete="off" placeholder={getTimeInputHint()} aria-describedby="start-time-help" value={startTime} onChange={(event) => { setStartTime(event.target.value); setSelection(null); }} /><small className="field-help" id="start-time-help">Use your local time format: {getTimeInputHint()}.</small></label>
-                </div></details>
-                <label className="field compact-field calendar-duration"><span>Duration (minutes)</span><input type="number" min="1" step="1" required value={durationMinutes} onChange={(event) => updateDuration(event.target.value)} /></label>
-                <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Adding…" : "Add meeting time"}</button>
-              </form>
+              {selection && <p className="calendar-preview" role="status">{t("Selected: {date}, {time} for {duration} minutes ({zone}).", { date: new Intl.DateTimeFormat(locale, { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${selection.day}T12:00:00Z`)), time: new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, Math.floor(selection.minute / 60), selection.minute % 60))), duration: selection.duration, zone: timeZone })}</p>}
             </section>
             <section className="panel" aria-labelledby="slots-heading">
-              <h2 id="slots-heading">Meeting times</h2>
-              {slots.length === 0 ? <p className="empty-state">No meeting times yet.</p> : <ul>{slots.map((slot) => {
-                const formatted = formatSlot(slot);
-                const statusLabel = slot.state === "available" ? "Available" : slot.state === "held" ? "Temporarily held" : "Booked";
+              <h2 id="slots-heading">{t("Meeting times")}</h2>
+              {slots.length === 0 ? <p className="empty-state">{t("No meeting times yet.")}</p> : <ul>{slots.map((slot) => {
+                const formatted = formatSlot(slot, locale);
+                const statusLabel = slot.state === "available" ? t("Available") : slot.state === "held" ? t("Temporarily held") : t("Booked");
                 const holdExpires = slot.holdExpiresAt
-                  ? ` · hold until ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: slot.timeZone, timeZoneName: "short" }).format(new Date(slot.holdExpiresAt))}`
+                  ? ` · ${t("Hold until {time}", { time: new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: slot.timeZone, timeZoneName: "short" }).format(new Date(slot.holdExpiresAt)) })}`
                   : "";
-                return <li className="slot-row" key={slot.slotId}><div><strong>{formatted.date}</strong><p className="mono">{formatted.timeRange}</p><p>{formatted.timeZone} · {formatted.durationMinutes} minutes{holdExpires}</p><span className={`status status-${slot.state}`}>{statusLabel}</span></div>{slot.state === "available" && <button className="button button-secondary" type="button" onClick={() => void removeSlot(slot.slotId)}>Remove</button>}</li>;
+                return <li className="slot-row" key={slot.slotId}><div><strong>{formatted.date}</strong><p className="mono">{formatted.timeRange}</p><p>{formatted.timeZone} · {formatted.durationMinutes} {t("minutes")}{holdExpires}</p><span className={`status status-${slot.state}`}>{statusLabel}</span></div>{slot.state === "available" && <button className="button button-secondary" type="button" onClick={() => void removeSlot(slot.slotId)}>{t("Remove")}</button>}</li>;
               })}</ul>}
             </section>
             <section className="panel" aria-labelledby="bookings-heading">
-              <h2 id="bookings-heading">Bookings</h2>
-              {bookings.length === 0 ? <p className="empty-state">No bookings yet.</p> : <ul>{bookings.map((booking) => {
-                const formatted = formatSlot(booking.slot);
-                const statusLabel = booking.status === "confirmed" ? "Confirmed" : "Cancelled";
-                return <li className="slot-row" key={booking.bookingId}><div><strong>{formatted.date}</strong><p className="mono">{formatted.timeRange}</p><p>{formatted.timeZone} · {booking.clientEmail}</p><span className={`status status-${booking.status}`}>{statusLabel}</span></div>{booking.status === "confirmed" && <button className="button button-secondary" type="button" onClick={() => void cancelBooking(booking.bookingId)}>Cancel booking</button>}</li>;
+              <h2 id="bookings-heading">{t("Bookings")}</h2>
+              {bookings.length === 0 ? <p className="empty-state">{t("No bookings yet.")}</p> : <ul>{bookings.map((booking) => {
+                const formatted = formatSlot(booking.slot, locale);
+                const statusLabel = booking.status === "confirmed" ? t("Confirmed") : t("Cancelled");
+                return <li className="slot-row" key={booking.bookingId}><div><strong>{formatted.date}</strong><p className="mono">{formatted.timeRange}</p><p>{formatted.timeZone} · {booking.clientEmail}</p><span className={`status status-${booking.status}`}>{statusLabel}</span></div>{booking.status === "confirmed" && <button className="button button-secondary" type="button" onClick={() => void cancelBooking(booking.bookingId)}>{t("Cancel booking")}</button>}</li>;
               })}</ul>}
             </section>
           </div>
+          {selection && <form className="calendar-action-bar" onSubmit={createSlot}>
+            <div className="calendar-action-summary"><strong>{t("Selected time")}</strong><span>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${selection.day}T12:00:00Z`))} · {new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, Math.floor(selection.minute / 60), selection.minute % 60)))} ({timeZone})</span></div>
+            <label className="field compact-field"><span>{t("Duration (minutes)")}</span><input type="number" min="1" step="1" required value={durationMinutes} onChange={(event) => updateDuration(event.target.value)} /></label>
+            <button className="button button-primary" type="submit" disabled={saving || selectionIsPast || !selectionSlot || !durationIsValid}>{saving ? t("Adding…") : t("Add a meeting time")}</button>
+          </form>}
         </>
       )}
     </main>
