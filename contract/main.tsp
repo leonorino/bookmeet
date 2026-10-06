@@ -50,6 +50,8 @@ model OrganizerCreatedResponse {
   managementKey: string;
 }
 
+model OrganizerIdentityResponse { organizerId: string; }
+
 model Slot {
   slotId: string;
   /** Start instant, encoded as an RFC 3339 date-time in UTC. */
@@ -139,6 +141,11 @@ op health(): HealthResponse | InternalError;
 @route("/v1/organizers") @post
 @doc("Creates an empty organizer workspace. Anyone may create one. The returned management key is disclosed only in this response. organizerEmail receives booking confirmation and cancellation notifications.")
 op createOrganizer(@body request: CreateOrganizerRequest): OrganizerCreatedResponse | InvalidRequest | InternalError;
+
+@useAuth(BearerAuth)
+@doc("Resolves the organizer ID associated with the bearer management key.")
+@route("/v1/organizers/me") @get
+op getOrganizerIdentity(): OrganizerIdentityResponse | Unauthenticated | InternalError;
 
 @route("/v1/public/organizers/{organizerId}/availability") @get
 @doc("Returns only currently available slots. Held, booked, and withdrawn slots are excluded. When a hold expires, its slot becomes eligible for availability again.")

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { ApiError, api, type OrganizerBooking, type OrganizerSlot } from "../lib/api";
 import { forgetManagementKey, getManagementKey, saveManagementKey } from "../lib/management-key";
 import { formatSlot, getBrowserTimeZone, getDateInputHint, getTimeInputHint, getTimeZones, parseLocalizedDate, parseLocalizedTime, resolveLocalDateTime } from "../lib/time";
@@ -66,10 +66,18 @@ function calendarMinute(element: HTMLElement, clientY: number): number {
   return Math.max(0, Math.min(1425, raw));
 }
 
+function managementKeyFromNavigationState(state: unknown): string {
+  if (typeof state !== "object" || state === null || !("managementKey" in state)) return "";
+  return typeof state.managementKey === "string" ? state.managementKey : "";
+}
+
 export default function Manage() {
   const { organizerId = "" } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navigationKey = managementKeyFromNavigationState(location.state);
   const [keyOwner, setKeyOwner] = useState(organizerId);
-  const [storedKey, setStoredKey] = useState(() => getManagementKey(organizerId) ?? "");
+  const [storedKey, setStoredKey] = useState(() => navigationKey || getManagementKey(organizerId) || "");
   const key = keyOwner === organizerId ? storedKey : "";
   const [keyInput, setKeyInput] = useState("");
   const [slots, setSlots] = useState<OrganizerSlot[]>([]);
@@ -104,14 +112,27 @@ export default function Manage() {
   useEffect(() => {
     loadSequence.current += 1;
     setKeyOwner(organizerId);
+    setKeyStorageWarning("");
     setStoredKey(getManagementKey(organizerId) ?? "");
     setKeyInput("");
     setSlots([]);
     setBookings([]);
     setError("");
     setMessage("");
-    setKeyStorageWarning("");
   }, [organizerId]);
+
+  useEffect(() => {
+    const routeKey = managementKeyFromNavigationState(location.state);
+    if (!routeKey) return;
+
+    setStoredKey(routeKey);
+    try {
+      saveManagementKey(organizerId, routeKey);
+    } catch {
+      setKeyStorageWarning("This browser could not save the key. It will only work until you leave this page, so keep it somewhere safe.");
+    }
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key, location.pathname, location.state, navigate, organizerId]);
 
   const load = useCallback(async (managementKey: string) => {
     const sequence = ++loadSequence.current;
@@ -154,6 +175,7 @@ export default function Manage() {
 
   function forgetKey() {
     forgetManagementKey(organizerId);
+    navigate(location.pathname, { replace: true, state: null });
     setStoredKey("");
     setKeyStorageWarning("");
     setError("");

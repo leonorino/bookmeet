@@ -52,6 +52,32 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateOrganizerRequest'
+  /v1/organizers/me:
+    get:
+      operationId: getOrganizerIdentity
+      description: Resolves the organizer ID associated with the bearer management key.
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizerIdentityResponse'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthenticated'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalError'
+      security:
+        - BearerAuth: []
   /v1/organizers/{organizerId}/bookings:
     get:
       operationId: listOrganizerBookings
@@ -837,6 +863,13 @@ components:
         managementKey:
           type: string
           description: Cryptographically random 256-bit management key; returned only when this organizer is created.
+    OrganizerIdentityResponse:
+      type: object
+      required:
+        - organizerId
+      properties:
+        organizerId:
+          type: string
     OrganizerSlot:
       type: object
       required:

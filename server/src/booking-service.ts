@@ -97,6 +97,12 @@ export class BookingService {
   }
 
   authorizeOrganizer(organizerId: string, credential: string | undefined): void {
+    if (this.resolveOrganizerId(credential) !== organizerId) {
+      throw new ApiError(403, 'ORGANIZER_ACCESS_DENIED', 'This management key does not grant access to the requested organizer.');
+    }
+  }
+
+  resolveOrganizerId(credential: string | undefined): string {
     if (!credential) {
       throw new ApiError(401, 'ORGANIZER_KEY_INVALID', 'A valid organizer management key is required.');
     }
@@ -108,9 +114,7 @@ export class BookingService {
     if (!organizer) {
       throw new ApiError(401, 'ORGANIZER_KEY_INVALID', 'The organizer management key is invalid.');
     }
-    if (organizer.organizer_id !== organizerId) {
-      throw new ApiError(403, 'ORGANIZER_ACCESS_DENIED', 'This management key does not grant access to the requested organizer.');
-    }
+    return organizer.organizer_id;
   }
 
   getPublicAvailability(organizerId: string): SlotDetails[] {

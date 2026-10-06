@@ -9,24 +9,6 @@ interface CreatedWorkspace {
   keySaved: boolean;
 }
 
-function parseOrganizerId(value: string): string | null {
-  const input = value.trim();
-  if (!input) return null;
-
-  if (!/[/:?#]/.test(input) && !/^[a-z][a-z\d+.-]*:/i.test(input)) return input;
-
-  try {
-    const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(input);
-    const url = new URL(input, window.location.origin);
-    if (hasScheme && url.origin !== window.location.origin) return null;
-
-    const match = /^\/book\/([^/]+)\/?$/.exec(url.pathname);
-    return match ? decodeURIComponent(match[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function meta() {
   return [
     { title: "Meeting Booking — make time for the conversation" },
@@ -40,8 +22,9 @@ export function meta() {
 export default function Home() {
   const navigate = useNavigate();
   const [organizerEmail, setOrganizerEmail] = useState("");
-  const [organizerId, setOrganizerId] = useState("");
+  const [managementKey, setManagementKey] = useState("");
   const [creating, setCreating] = useState(false);
+  const [openingWorkspace, setOpeningWorkspace] = useState(false);
   const [error, setError] = useState("");
   const [manageError, setManageError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
@@ -73,15 +56,25 @@ export default function Home() {
     }
   }
 
-  function handleOpenWorkspace(event: FormEvent<HTMLFormElement>) {
+  async function handleOpenWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const id = parseOrganizerId(organizerId);
-    if (!id) {
-      setManageError("Enter an organizer ID or paste its public booking link from this site.");
-      return;
-    }
     setManageError("");
-    navigate(`/manage/${encodeURIComponent(id)}`);
+    setOpeningWorkspace(true);
+
+    const key = managementKey.trim();
+    try {
+      const { organizerId: id } = await api.getOrganizerForManagementKey(key);
+      try {
+        saveManagementKey(id, key);
+      } catch {
+        // The key is also passed in navigation state so this session can continue without local storage.
+      }
+      navigate(`/manage/${encodeURIComponent(id)}`, { state: { managementKey: key } });
+    } catch (cause) {
+      setManageError(cause instanceof ApiError ? cause.message : "Could not open this workspace. Try again.");
+    } finally {
+      setOpeningWorkspace(false);
+    }
   }
 
   async function copy(value: string, label: string) {
@@ -159,9 +152,9 @@ export default function Home() {
                 </div>
               </div>
               <div className="workspace-details">
-                <h4 className="result-section-title">Workspace details</h4>
+                <h4 className="result-section-title">Management key</h4>
                 <div className="field">
-                  <span>Management key</span>
+                  <span>Keep this key private</span>
                   <div className="copy-row">
                     <code className="copy-value" aria-label="Management key">{workspace.managementKey}</code>
                     <button className="button button-secondary" type="button" onClick={() => void copy(workspace.managementKey, "Management key")}>
@@ -174,21 +167,12 @@ export default function Home() {
                       : "Not saved here. Copy it now; keep it private. It can’t be recovered."}
                   </p>
                 </div>
-                <div className="field">
-                  <span>Organizer ID</span>
-                  <div className="copy-row">
-                    <code className="copy-value" aria-label="Organizer ID">{workspace.organizerId}</code>
-                    <button className="button button-secondary" type="button" onClick={() => void copy(workspace.organizerId, "Organizer ID")}>
-                      Copy ID
-                    </button>
-                  </div>
-                </div>
               </div>
               <div className="form-actions">
                 <button
                   className="button button-primary"
                   type="button"
-                  onClick={() => navigate(`/manage/${encodeURIComponent(workspace.organizerId)}`)}
+                  onClick={() => navigate(`/manage/${encodeURIComponent(workspace.organizerId)}`, { state: { managementKey: workspace.managementKey } })}
                 >
                   Add meeting times
                 </button>
@@ -206,23 +190,26 @@ export default function Home() {
         <div>
           <p className="eyebrow">Already have a page?</p>
           <h2 id="manage-heading">Manage your availability.</h2>
-          <p className="panel-copy">Paste your organizer ID or public booking link. Your saved key will be used on this device.</p>
+          <p className="panel-copy">Enter your management key to open your workspace and manage availability.</p>
         </div>
         <form className="manage-entry" onSubmit={handleOpenWorkspace}>
           <label className="field">
-            <span>Organizer ID or booking link</span>
+            <span>Management key</span>
             <input
-              autoComplete="off"
-              name="organizerId"
+              autoComplete="current-password"
+              type="password"
+              name="managementKey"
               required
-              value={organizerId}
+              value={managementKey}
               onChange={(event) => {
-                setOrganizerId(event.target.value);
+                setManagementKey(event.target.value);
                 setManageError("");
               }}
             />
           </label>
-          <button className="button button-secondary" type="submit">Open workspace</button>
+          <button className="button button-secondary" type="submit" disabled={openingWorkspace}>
+            {openingWorkspace ? "Opening workspace…" : "Open workspace"}
+          </button>
         </form>
         {manageError && <p className="notice notice-error" role="alert">{manageError}</p>}
       </section>

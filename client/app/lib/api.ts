@@ -122,6 +122,12 @@ export const api = {
     });
   },
 
+  getOrganizerForManagementKey(managementKey: string): Promise<{ organizerId: string }> {
+    return request("/v1/organizers/me", {
+      headers: bearerHeaders(managementKey),
+    });
+  },
+
   getOrganizerSlots(organizerId: string, managementKey: string): Promise<{ slots: OrganizerSlot[] }> {
     return request(`/v1/organizers/${idPathSegment(organizerId)}/slots`, {
       headers: bearerHeaders(managementKey),

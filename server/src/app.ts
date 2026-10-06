@@ -110,6 +110,18 @@ export function buildApp(options: AppOptions = {}) {
     return reply.code(201).send(organizer);
   });
 
+  app.get('/v1/organizers/me', {
+    schema: {
+      response: {
+        200: Type.Object({ organizerId: Id }),
+        401: errorSchema(['ORGANIZER_KEY_INVALID']),
+        500: errorSchema(['INTERNAL_ERROR']),
+      },
+    },
+  }, async (request) => ({
+    organizerId: service.resolveOrganizerId(parseBearer(request.headers.authorization)),
+  }));
+
   app.get('/v1/public/organizers/:organizerId/availability', {
     schema: {
       params: Type.Object({ organizerId: Id }),
