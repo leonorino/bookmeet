@@ -17,10 +17,10 @@ interface CopyFeedback {
 
 export function meta() {
   return [
-    { title: "Meeting Booking — make time for the conversation" },
+    { title: "Meeting Booking" },
     {
       name: "description",
-      content: "Share the times that work for you and let clients book without an account.",
+      content: "Create a booking page or open your organizer workspace.",
     },
   ];
 }
@@ -106,22 +106,9 @@ export default function Home() {
         </nav>
       </header>
 
-      <section className="home-hero" aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <p className="eyebrow">{t("A simpler way to find a time")}</p>
-          <h1 id="hero-title">{t("Make time for the conversation.")}</h1>
-          <p className="intro">
-            {t("Share a few meeting times. Let clients choose the one that works for them.\n            No account and no back-and-forth needed.")}
-          </p>
-          <p className="trust-note"><span aria-hidden="true">✓</span> {t("One clear time, confirmed for everyone.")}</p>
-        </div>
-
+      <section className="home-hero" aria-label={t("Get started")}>
         <section className="panel start-panel" aria-labelledby="create-heading">
-          <p className="eyebrow">{t("For organizers")}</p>
-          <h2 id="create-heading">{t("Create a booking page")}</h2>
-          <p className="panel-copy">
-            {t("Add your notification email to create a workspace. You can add meeting times next.")}
-          </p>
+          <h1 id="create-heading">{t("Create a booking page")}</h1>
           <form className="form-stack" onSubmit={handleCreateWorkspace}>
             <label className="field">
               <span>{t("Organizer email")}</span>
@@ -134,7 +121,7 @@ export default function Home() {
                 value={organizerEmail}
                 onChange={(event) => setOrganizerEmail(event.target.value)}
               />
-              <span className="field-help">{t("Booking confirmations and cancellations will be sent here.")}</span>
+              <span className="field-help">{t("Booking confirmations and cancellations go to this address.")}</span>
             </label>
             <button className="button button-primary" type="submit" disabled={creating}>
               {creating ? t("Creating page…") : t("Create booking page")}
@@ -146,7 +133,6 @@ export default function Home() {
           {workspace && (
             <section className="creation-result" aria-labelledby="workspace-ready" aria-live="polite">
               <div className="result-rule" />
-              <p className="eyebrow">{t("Workspace ready")}</p>
               <h3 id="workspace-ready">{t("Booking page created")}</h3>
               <div className="result-share">
                 <h4 className="result-section-title">{t("Booking link")}</h4>
@@ -170,8 +156,8 @@ export default function Home() {
                   </div>
                   <p className="field-help">
                     {workspace.keySaved
-                      ? t("Saved on this device. Your organizer ID and key will also be emailed to you. Keep the key private; there is no recovery endpoint.")
-                      : t("Not saved here. Copy it now. Your organizer ID and key will also be emailed to you. Keep the key private; there is no recovery endpoint.")}
+                      ? t("Saved on this device. A copy will be emailed to you. Keep the email as backup; if both copies are lost, the key cannot be recovered.")
+                      : t("Not saved here. Copy it now. A copy will be emailed to you. Keep the email as backup; if both copies are lost, the key cannot be recovered.")}
                   </p>
                 </div>
               </div>
@@ -191,51 +177,34 @@ export default function Home() {
             </section>
           )}
         </section>
-      </section>
-
-      <section className="home-secondary" aria-labelledby="manage-heading">
-        <div>
-          <p className="eyebrow">{t("Already have a page?")}</p>
-          <h2 id="manage-heading">{t("Manage your availability.")}</h2>
-          <p className="panel-copy">{t("Enter your management key to open your workspace and manage availability.")}</p>
-        </div>
-        <form className="manage-entry" onSubmit={handleOpenWorkspace}>
-          <label className="field">
-            <span>{t("Management key")}</span>
-            <input
-              autoComplete="current-password"
-              type="password"
-              name="managementKey"
-              required
-              value={managementKey}
-              onChange={(event) => {
-                setManagementKey(event.target.value);
-                setManageError("");
-              }}
-            />
-          </label>
-          <button className="button button-secondary" type="submit" disabled={openingWorkspace}>
-            {openingWorkspace ? t("Opening workspace…") : t("Open workspace")}
-          </button>
-        </form>
-        {manageError && <p className="notice notice-error" role="alert">{t(manageError)}</p>}
-      </section>
-
-      <section className="how-section" aria-labelledby="how-heading">
-        <div>
-          <p className="eyebrow">{t("How it works")}</p>
-          <h2 id="how-heading">{t("A time chosen.")}<br />{t("A plan confirmed.")}</h2>
-        </div>
-        <ol className="steps-list">
-          <li><span className="step-number mono">01</span><span>{t("Organizers share one-off meeting times.")}</span></li>
-          <li><span className="step-number mono">02</span><span>{t("Clients choose a time and add their email.")}</span></li>
-          <li><span className="step-number mono">03</span><span>{t("Both sides receive the confirmed meeting details.")}</span></li>
-        </ol>
+        <section className="panel home-secondary" aria-labelledby="manage-heading">
+          <h2 id="manage-heading">{t("Return to your workspace")}</h2>
+          <p className="panel-copy">{t("Enter your management key to manage your meeting times.")}</p>
+          <form className="manage-entry" onSubmit={handleOpenWorkspace}>
+            <label className="field">
+              <span>{t("Management key")}</span>
+              <input
+                autoComplete="current-password"
+                type="password"
+                name="managementKey"
+                required
+                value={managementKey}
+                onChange={(event) => {
+                  setManagementKey(event.target.value);
+                  setManageError("");
+                }}
+              />
+            </label>
+            <button className="button button-secondary" type="submit" disabled={openingWorkspace}>
+              {openingWorkspace ? t("Opening workspace…") : t("Open workspace")}
+            </button>
+          </form>
+          {manageError && <p className="notice notice-error" role="alert">{t(manageError)}</p>}
+        </section>
       </section>
 
       <footer className="site-footer">
         <span>{t("Meeting Booking")}</span>
-        <Link to="/cancel">{t("Cancel an existing booking")}</Link>
       </footer>
     </main>
   );

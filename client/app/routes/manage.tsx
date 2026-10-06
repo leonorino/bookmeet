@@ -331,7 +331,6 @@ export default function Manage() {
         <nav className="main-nav" aria-label={t("Main navigation")}><Link to={`/book/${encodeURIComponent(organizerId)}`}>{t("Public booking page")}</Link><Link to="/cancel">{t("Cancel a booking")}</Link><LanguageSwitcher /></nav>
       </header>
       <section className="page-heading">
-        <p className="eyebrow">{t("Organizer workspace")}</p>
         <h1>{t("Manage your availability")}</h1>
       </section>
       {error && <p className="notice notice-error" role="alert">{t(error)}</p>}
@@ -357,7 +356,7 @@ export default function Manage() {
                 <div className="calendar-navigation"><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}>{t("Previous")}</button><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(dateInZone(new Date(), timeZone))}>{t("Today")}</button><button className="button button-secondary" type="button" onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}>{t("Next")}</button><span className="calendar-week-range" aria-live="polite">{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${weekDays[0]}T12:00:00Z`))} – {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${weekDays[6]}T12:00:00Z`))}</span></div>
                 <label className="field"><span>{t("Time zone")}</span><select required value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>{timeZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>
               </div>
-              <p className="field-help">{t("Drag within a day to choose a start time and duration. On touch screens, tap a time to choose a 15-minute start, then adjust the duration in the action bar.")}</p>
+              <p className="field-help">{t("Drag to select a start time and duration. On touch screens, tap a time, then set the duration below.")}</p>
               <div className="calendar-scroll"><div className="week-calendar">
                 <div className="calendar-corner" />{weekDays.map((day) => <div className="calendar-day-heading" key={day}><strong>{new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`))}</strong><span>{new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`))}</span></div>)}
                 <div className="calendar-hours">{Array.from({ length: 24 }, (_, index) => <span key={index}>{new Intl.DateTimeFormat(locale, { hour: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, index)))}</span>)}</div>
@@ -379,7 +378,6 @@ export default function Manage() {
                   {!selectionSlot && selection?.day === day && <div className="calendar-selection" style={{ top: `${selection.minute}px`, height: `${Math.min(selection.duration, 1440 - selection.minute)}px` }} />}
                 </div>)}
               </div></div>
-              {selection && <p className="calendar-preview" role="status">{t("Selected: {date}, {time} for {duration} minutes ({zone}).", { date: new Intl.DateTimeFormat(locale, { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${selection.day}T12:00:00Z`)), time: new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, Math.floor(selection.minute / 60), selection.minute % 60))), duration: selection.duration, zone: timeZone })}</p>}
             </section>
             <section className="panel" aria-labelledby="slots-heading">
               <h2 id="slots-heading">{t("Meeting times")}</h2>
@@ -402,7 +400,7 @@ export default function Manage() {
             </section>
           </div>
           {selection && <form className="calendar-action-bar" onSubmit={createSlot}>
-            <div className="calendar-action-summary"><strong>{t("Selected time")}</strong><span>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${selection.day}T12:00:00Z`))} · {new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, Math.floor(selection.minute / 60), selection.minute % 60)))} ({timeZone})</span></div>
+            <div className="calendar-action-summary" role="status" aria-atomic="true"><strong>{t("Selected time")}</strong><span>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${selection.day}T12:00:00Z`))} · {new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 1, Math.floor(selection.minute / 60), selection.minute % 60)))} ({timeZone})</span></div>
             <label className="field compact-field"><span>{t("Duration (minutes)")}</span><input type="number" min="1" step="1" required value={durationMinutes} onChange={(event) => updateDuration(event.target.value)} /></label>
             <button className="button button-primary" type="submit" disabled={saving || selectionIsPast || !selectionSlot || !durationIsValid}>{saving ? t("Adding…") : t("Add a meeting time")}</button>
           </form>}

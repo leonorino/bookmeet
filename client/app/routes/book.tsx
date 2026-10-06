@@ -118,18 +118,18 @@ export default function Book() {
   return (
     <main className="page-shell">
       <header className="site-header"><Link className="wordmark" to="/">{t("Meeting Booking")}</Link><nav className="main-nav" aria-label={t("Main navigation")}><Link to="/cancel">{t("Cancel a booking")}</Link><LanguageSwitcher /></nav></header>
-      <section className="page-heading"><p className="eyebrow">{t("Choose a time")}</p><h1>{t("Book a meeting")}</h1><p>{t("Times are shown in the time zone listed for each meeting.")}</p></section>
+      <section className="page-heading"><h1>{t("Book a meeting")}</h1><p>{t("Times are shown in the time zone listed for each meeting.")}</p></section>
       {error && <p className="notice notice-error" role="alert">{t(error)}</p>}
       {notice && <p className="notice" role="status">{t(notice)}</p>}
 
       {booking ? (
-        <section className="panel" aria-labelledby="confirmed-heading" aria-live="polite">
-          <p className="eyebrow">{t("Booking confirmed")}</p><h2 id="confirmed-heading">{t("You’re all set.")}</h2>
+        <section className="panel booking-confirmation" aria-labelledby="confirmed-heading" aria-live="polite">
+          <h2 id="confirmed-heading">{t("Booking confirmed")}</h2>
           <p>{formatSlot(booking.slot, locale).date} · <span className="mono">{formatSlot(booking.slot, locale).timeRange}</span> ({booking.slot.timeZone}) · {formatSlot(booking.slot, locale).durationMinutes} {t("minutes")}</p>
           <p>{t("A confirmation email with your booking ID and cancellation credential will be sent to {email}.", { email: booking.clientEmail })}</p>
           <label className="field"><span>{t("Booking ID")}</span><div className="copy-row"><code className="copy-value mono">{booking.bookingId}</code><button className="button button-secondary" type="button" onClick={() => void copy(booking.bookingId, "Booking ID")}>{t("Copy ID")}</button></div></label>
           <label className="field"><span>{t("Cancellation credential")}</span><div className="copy-row"><code className="copy-value mono">{booking.cancellationCredential}</code><button className="button button-secondary" type="button" onClick={() => void copy(booking.cancellationCredential, "Cancellation credential")}>{t("Copy credential")}</button></div></label>
-          <p className="notice">{t("Your cancellation credential will also be emailed to you. Save it to cancel this booking later.")}</p>{copyMessage && <p role="status">{t(copyMessage.key, { label: t(copyMessage.label) })}</p>}
+          <p className="notice">{t("Use this credential or the emailed copy to cancel the booking.")}</p>{copyMessage && <p role="status">{t(copyMessage.key, { label: t(copyMessage.label) })}</p>}
           <Link className="button button-quiet" to="/cancel">{t("Cancel this booking")}</Link>
         </section>
       ) : (
@@ -140,7 +140,7 @@ export default function Book() {
               return <li className="slot-row" key={slot.slotId}><div><strong>{formatted.date}</strong><p className="mono">{formatted.timeRange}</p><p>{formatted.timeZone} · {formatted.durationMinutes} {t("minutes")}</p><span className="status status-available">{t("Available")}</span></div><button className="button button-primary" type="button" disabled={busy} onClick={() => void selectSlot(slot)}>{t("Choose time")}</button></li>;
             })}</ul>}
           </section>
-          {hold && <section className="panel" aria-labelledby="hold-heading"><p className="eyebrow">{t("Time reserved temporarily")}</p><h2 id="hold-heading">{t("Complete your booking")}</h2><p>{formatSlot(hold.slot, locale).date} · <span className="mono">{formatSlot(hold.slot, locale).timeRange}</span> ({hold.slot.timeZone}) · {formatSlot(hold.slot, locale).durationMinutes} {t("minutes")}</p><p className="status status-held" role="timer">{remaining > 0 ? t("Temporarily held · about {time} remaining", { time: `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}` }) : t("Temporarily held · timer elapsed; confirmation will check availability")}</p><form className="form-stack" onSubmit={confirm}><label className="field"><span>{t("Email for confirmation")}</span><input type="email" name="clientEmail" autoComplete="email" maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button button-primary" type="submit" disabled={busy}>{busy ? t("Confirming…") : t("Confirm booking")}</button></form></section>}
+          {hold && <section className="panel booking-hold" aria-labelledby="hold-heading"><h2 id="hold-heading">{t("Complete your booking")}</h2><p>{formatSlot(hold.slot, locale).date} · <span className="mono">{formatSlot(hold.slot, locale).timeRange}</span> ({hold.slot.timeZone}) · {formatSlot(hold.slot, locale).durationMinutes} {t("minutes")}</p><p className="status status-held" role="timer">{remaining > 0 ? t("Temporarily held · about {time} remaining", { time: `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}` }) : t("Temporarily held · timer elapsed; confirmation will check availability")}</p><form className="form-stack" onSubmit={confirm}><label className="field"><span>{t("Email for confirmation")}</span><input type="email" name="clientEmail" autoComplete="email" maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button button-primary" type="submit" disabled={busy}>{busy ? t("Confirming…") : t("Confirm booking")}</button></form></section>}
         </div>
       )}
     </main>
