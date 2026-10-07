@@ -5,6 +5,7 @@ export interface OutgoingEmail {
   to: string;
   subject: string;
   text: string;
+  attachments?: Array<{ filename: string; content: string; contentType: string }>;
 }
 
 export interface MailSender {
@@ -23,6 +24,7 @@ export interface SmtpConfiguration {
 interface OutboxRow extends OutgoingEmail {
   notification_id: string;
   attempts: number;
+  attachments_json: string | null;
 }
 
 const POLL_INTERVAL_MS = 30_000;
@@ -84,7 +86,7 @@ export class OutboxWorker {
     for (;;) {
       const message = this.database.prepare(`
         SELECT current.notification_id, current.recipient_email AS to_address, current.subject,
-          current.text_body AS text, current.attempts, current.contains_credentials
+          current.text_body AS text, current.attempts, current.contains_credentials, current.attachments_json
         FROM notification_outbox AS current
         WHERE current.status = 'pending' AND current.available_at <= ?
           AND (
@@ -105,6 +107,7 @@ export class OutboxWorker {
         to: message.to_address,
         subject: message.subject,
         text: message.text,
+        ...(message.attachments_json ? { attachments: JSON.parse(message.attachments_json) as OutgoingEmail['attachments'] } : {}),
       };
 
       try {

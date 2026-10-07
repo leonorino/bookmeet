@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { ApiError, api, type Booking, type Slot } from "../lib/api";
+import { downloadBookingCalendar } from "../lib/calendar";
 import { LanguageSwitcher, useI18n } from "../lib/i18n";
 import { formatSlot } from "../lib/time";
 
@@ -126,6 +127,7 @@ export default function Book() {
         <section className="panel booking-confirmation" aria-labelledby="confirmed-heading" aria-live="polite">
           <h2 id="confirmed-heading">{t("Booking confirmed")}</h2>
           <p>{formatSlot(booking.slot, locale).date} · <span className="mono">{formatSlot(booking.slot, locale).timeRange}</span> ({booking.slot.timeZone}) · {formatSlot(booking.slot, locale).durationMinutes} {t("minutes")}</p>
+          <button className="button button-secondary" type="button" onClick={() => downloadBookingCalendar(booking)}>{t("Add to calendar")}</button>
           <p>{t("A confirmation email with your booking ID and cancellation credential will be sent to {email}.", { email: booking.clientEmail })}</p>
           <label className="field"><span>{t("Booking ID")}</span><div className="copy-row"><code className="copy-value mono">{booking.bookingId}</code><button className="button button-secondary" type="button" onClick={() => void copy(booking.bookingId, "Booking ID")}>{t("Copy ID")}</button></div></label>
           <label className="field"><span>{t("Cancellation credential")}</span><div className="copy-row"><code className="copy-value mono">{booking.cancellationCredential}</code><button className="button button-secondary" type="button" onClick={() => void copy(booking.cancellationCredential, "Cancellation credential")}>{t("Copy credential")}</button></div></label>

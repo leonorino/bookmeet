@@ -9,6 +9,22 @@ type Translator = (key: string, values?: TranslationValues) => string;
 const translations: Record<Language, Record<string, string>> = {
   en: {},
   ru: {
+    "Privacy": "Конфиденциальность",
+    "Got it": "Понятно",
+    "This prototype uses browser storage for your language choice and notice dismissal; organizer keys may also be stored there.": "Прототип использует хранилище браузера для языковых настроек и закрытия уведомления; там также могут храниться ключи организатора.",
+    "Privacy policy": "Политика конфиденциальности",
+    "Privacy policy — Meeting Booking": "Политика конфиденциальности — Бронирование встреч",
+    "How this prototype handles information.": "Как этот прототип обрабатывает данные.",
+    "Language preference": "Языковые настройки",
+    "When you choose a language, the app stores it in local and session storage when available. If only session storage works, it lasts until the tab is closed. If neither is available, the choice lasts only while the app is open.": "Выбранный язык сохраняется в локальном и сеансовом хранилищах браузера, если они доступны. Если работает только сеансовое хранилище, выбор сохраняется до закрытия вкладки. Если оба хранилища недоступны, выбор действует, пока приложение открыто.",
+    "Organizer keys": "Ключи организатора",
+    "The app may save a workspace management key in this browser’s local storage when you create or open a workspace. The service emails the organizer ID and key to the organizer when the workspace is created. Anyone with the key can manage that workspace, so keep it private.": "При создании или открытии рабочего пространства приложение может сохранить ключ управления в локальном хранилище браузера. При создании сервис отправляет идентификатор организатора и ключ на его электронную почту. Ключ даёт доступ к управлению рабочим пространством, поэтому храните его в тайне.",
+    "Bookings and email": "Бронирования и электронная почта",
+    "The service stores organizer and client email addresses and booking records, including the selected meeting time and booking status. It sends setup emails to organizers and booking or cancellation emails to the relevant addresses. Confirmation emails include a booking ID and cancellation credential; setup emails include the organizer management key. This prototype has no defined retention or deletion schedule for these records.": "Сервис хранит адреса электронной почты организаторов и клиентов, а также записи о бронированиях, включая выбранное время встречи и статус бронирования. Он отправляет организаторам письма о настройке, а нужным адресатам — письма о бронировании и отмене. В письмах с подтверждением указаны номер бронирования и код отмены; в письмах о настройке — ключ управления организатора. Для этих данных в прототипе не установлен срок хранения или график удаления.",
+    "Fonts": "Шрифты",
+    "The stylesheet requests DM Sans from Google Fonts, so your browser contacts Google to retrieve the font when needed.": "Таблица стилей запрашивает DM Sans из Google Fonts, поэтому при необходимости браузер обращается к Google за шрифтом.",
+    "Notice dismissal": "Закрытие уведомления",
+    "Choosing “Got it” stores the dismissal in local storage or, if unavailable, session storage. If both are unavailable, the notice stays dismissed only while the app is open. It does not enable or disable any feature.": "Нажатие «Понятно» сохраняет отметку о закрытии уведомления в локальном хранилище, а если оно недоступно — в сеансовом. Если недоступны оба хранилища, уведомление остаётся закрытым, пока приложение открыто. Это не включает и не отключает функции.",
     "Language": "Язык",
     "Meeting Booking": "Бронирование встреч",
     "Get started": "Начало работы",
@@ -67,6 +83,7 @@ const translations: Record<Language, Record<string, string>> = {
     "Book a meeting": "Забронировать встречу",
     "Times are shown in the time zone listed for each meeting.": "Время указано в часовом поясе, выбранном для каждой встречи.",
     "Booking confirmed": "Бронирование подтверждено",
+    "Add to calendar": "Добавить в календарь",
     "You’re all set.": "Готово.",
     "A confirmation email with your booking ID and cancellation credential will be sent to {email}.": "Письмо с подтверждением, номером бронирования и кодом отмены будет отправлено на адрес {email}.",
     "Booking ID": "Номер бронирования",
@@ -200,6 +217,7 @@ const translations: Record<Language, Record<string, string>> = {
 };
 
 const metadata: Record<string, { title: string; description: string }> = {
+  "/privacy": { title: "Privacy policy — Meeting Booking", description: "How this prototype handles information." },
   "/": {
     title: "Meeting Booking",
     description: "Create a booking page or open your organizer workspace.",

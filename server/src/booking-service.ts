@@ -568,6 +568,7 @@ function enqueueBookingEmail(
   const commonText = `The meeting has been ${eventText}.\n\nDate and time: ${start}–${end} (${slot.time_zone})\nDuration: ${durationMinutes} minutes.`;
   const sequenceNumber = status === 'confirmed' ? 1 : 2;
   const sharedAddress = organizerEmail.toLowerCase() === clientEmail.toLowerCase();
+  const calendarAttachment = createCalendarAttachment(bookingId, slot, status, now, organizerEmail);
   const recipients = sharedAddress
     ? [{ email: clientEmail, text: `${commonText}${cancellationCredential ? `\n\nBooking ID: ${bookingId}\nCancellation credential: ${cancellationCredential}` : ''}`, containsCredentials: Boolean(cancellationCredential) }]
     : [
@@ -578,10 +579,83 @@ function enqueueBookingEmail(
   const insert = database.prepare(`
     INSERT OR IGNORE INTO notification_outbox (
       notification_id, event_id, aggregate_id, sequence_number, recipient_email, subject, text_body,
-      contains_credentials, status, attempts, available_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+      contains_credentials, attachments_json, status, attempts, available_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
   `);
   for (const recipient of recipients) {
-    insert.run(randomUUID(), eventId, bookingId, sequenceNumber, recipient.email, subject, recipient.text, Number(recipient.containsCredentials), now, now);
+    insert.run(randomUUID(), eventId, bookingId, sequenceNumber, recipient.email, subject, recipient.text, Number(recipient.containsCredentials), JSON.stringify([calendarAttachment]), now, now);
   }
+}
+
+function createCalendarAttachment(
+  bookingId: string,
+  slot: Pick<SlotRow, 'start_at' | 'end_at'>,
+  status: 'confirmed' | 'cancelled',
+  timestamp: number,
+  organizerEmail: string,
+): { filename: string; content: string; contentType: string } {
+  const stamp = toCalendarUtc(timestamp);
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Meeting Booking//Calendar 1.0//EN',
+    'CALSCALE:GREGORIAN',
+    `METHOD:${status === 'confirmed' ? 'PUBLISH' : 'CANCEL'}`,
+    'BEGIN:VEVENT',
+    `UID:booking-${bookingId}@meeting-booking.invalid`,
+    `DTSTAMP:${stamp}`,
+    `SEQUENCE:${status === 'confirmed' ? 0 : 1}`,
+    `DTSTART:${toCalendarUtc(slot.start_at)}`,
+    `DTEND:${toCalendarUtc(slot.end_at)}`,
+    `ORGANIZER:${toMailtoUri(organizerEmail)}`,
+    'SUMMARY:Meeting',
+    ...(status === 'cancelled' ? [
+      'STATUS:CANCELLED',
+    ] : []),
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+  return {
+    filename: `meeting-${bookingId}.ics`,
+    content: `${lines.map(foldCalendarLine).join('\r\n')}\r\n`,
+    contentType: `text/calendar; method=${status === 'confirmed' ? 'PUBLISH' : 'CANCEL'}; charset=utf-8`,
+  };
+}
+
+function toCalendarUtc(timestamp: number): string {
+  return new Date(timestamp).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function toMailtoUri(email: string): string {
+  const separator = email.lastIndexOf('@');
+  const localPart = email.slice(0, separator);
+  const domain = email.slice(separator + 1);
+  return `mailto:${encodeUriComponent(localPart)}@${encodeUriComponent(domain)}`;
+}
+
+function encodeUriComponent(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+function foldCalendarLine(line: string): string {
+  const segments: string[] = [];
+  let segment = '';
+  let segmentBytes = 0;
+
+  for (const character of line) {
+    const characterBytes = new TextEncoder().encode(character).length;
+    if (segmentBytes + characterBytes > 75) {
+      segments.push(segment);
+      segment = ` ${character}`;
+      segmentBytes = 1 + characterBytes;
+    } else {
+      segment += character;
+      segmentBytes += characterBytes;
+    }
+  }
+
+  segments.push(segment);
+  return segments.join('\r\n');
 }

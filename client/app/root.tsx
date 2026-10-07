@@ -8,6 +8,8 @@ import {
 } from "react-router";
 import type { Route } from "./+types/root";
 import { LanguageProvider } from "./lib/i18n";
+import { SiteFooter } from "./components/site-footer";
+import { PrivacyNotice } from "./components/privacy-notice";
 import "./styles.css";
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -16,6 +18,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
         <Links />
       </head>
@@ -39,5 +42,13 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function App() {
-  return <LanguageProvider><Outlet /></LanguageProvider>;
+  return (
+    <LanguageProvider>
+      <div className="app-shell">
+        <PrivacyNotice />
+        <Outlet />
+        <SiteFooter />
+      </div>
+    </LanguageProvider>
+  );
 }

@@ -382,24 +382,73 @@ describe('Meeting Slot Booking API', () => {
     expect(afterMeetingStart.json().error.code).toBe('SLOT_UNAVAILABLE');
   });
 
-  it('combines shared-address confirmation content using the client address spelling', async () => {
+  it('shares published and cancellation calendar updates when organizer and client use one address', async () => {
     const harness = trackHarness();
-    const organizer = await createOrganizer(harness.app, 'Same@example.com');
+    const localPart = `${'a'.repeat(55)}+tag`;
+    const organizerEmail = `${localPart}@example.com`;
+    const clientEmail = `${localPart}@EXAMPLE.com`;
+    const organizer = await createOrganizer(harness.app, organizerEmail);
     const slot = await createSlot(harness.app, organizer);
     const hold = (await createHold(harness.app, organizer.organizerId, slot.slotId)).json<HoldResult>().hold;
     const confirmation = await harness.app.inject({
       method: 'POST', url: `/v1/public/holds/${hold.holdId}/confirmation`,
-      payload: { holdCredential: hold.holdCredential, clientEmail: 'same@EXAMPLE.com' },
+      payload: { holdCredential: hold.holdCredential, clientEmail },
     });
+    expect(confirmation.statusCode).toBe(201);
     const booking = confirmation.json<BookingResult>().booking;
+    const cancellation = await harness.app.inject({
+      method: 'POST',
+      url: `/v1/public/bookings/${booking.bookingId}/cancellation`,
+      headers: { 'x-cancellation-credential': booking.cancellationCredential },
+    });
+    expect(cancellation.statusCode).toBe(200);
+
     const database = new Database(harness.databasePath, { readonly: true });
     try {
-      const rows = database.prepare(`SELECT recipient_email, text_body FROM notification_outbox WHERE event_id = ?`)
-        .all(`booking:${booking.bookingId}:confirmed`) as Array<{ recipient_email: string; text_body: string }>;
-      expect(rows).toHaveLength(1);
-      expect(rows[0].recipient_email).toBe('same@EXAMPLE.com');
+      const rows = database.prepare(`SELECT event_id, recipient_email, text_body, attachments_json FROM notification_outbox WHERE aggregate_id = ? ORDER BY sequence_number`)
+        .all(booking.bookingId) as Array<{ event_id: string; recipient_email: string; text_body: string; attachments_json: string }>;
+      expect(rows).toHaveLength(2);
+      expect(rows.map((row) => row.event_id)).toEqual([
+        `booking:${booking.bookingId}:confirmed`,
+        `booking:${booking.bookingId}:cancelled`,
+      ]);
+      expect(rows.every((row) => row.recipient_email === clientEmail)).toBe(true);
       expect(rows[0].text_body).toContain(booking.bookingId);
       expect(rows[0].text_body).toContain(booking.cancellationCredential);
+
+      const confirmationAttachments = JSON.parse(rows[0].attachments_json) as Array<{ content: string; contentType: string }>;
+      const cancellationAttachments = JSON.parse(rows[1].attachments_json) as Array<{ content: string; contentType: string }>;
+      expect(confirmationAttachments).toHaveLength(1);
+      expect(cancellationAttachments).toHaveLength(1);
+      const confirmationCalendar = confirmationAttachments[0].content;
+      const cancellationCalendar = cancellationAttachments[0].content;
+      const unfoldedConfirmation = confirmationCalendar.replace(/\r\n[ \t]/g, '');
+      const unfoldedCancellation = cancellationCalendar.replace(/\r\n[ \t]/g, '');
+      const encodedOrganizerEmail = `${localPart.replace('+', '%2B')}@example.com`;
+      const organizerIdentity = `ORGANIZER:mailto:${encodedOrganizerEmail}`;
+
+      expect(confirmationAttachments[0].contentType).toBe('text/calendar; method=PUBLISH; charset=utf-8');
+      expect(cancellationAttachments[0].contentType).toBe('text/calendar; method=CANCEL; charset=utf-8');
+      expect(unfoldedConfirmation).toContain('\r\nMETHOD:PUBLISH\r\n');
+      expect(unfoldedConfirmation).toContain(`\r\nUID:booking-${booking.bookingId}@meeting-booking.invalid\r\n`);
+      expect(unfoldedConfirmation).toContain('\r\nSEQUENCE:0\r\n');
+      expect(unfoldedConfirmation).toContain('\r\nDTSTART:20300103T120000Z\r\n');
+      expect(unfoldedConfirmation).toContain('\r\nDTEND:20300103T130000Z\r\n');
+      expect(unfoldedConfirmation).toContain(`\r\n${organizerIdentity}\r\n`);
+      expect(unfoldedConfirmation).not.toMatch(/\r\nATTENDEE:/);
+      expect(unfoldedCancellation).toContain('\r\nMETHOD:CANCEL\r\n');
+      expect(unfoldedCancellation).toContain(`\r\nUID:booking-${booking.bookingId}@meeting-booking.invalid\r\n`);
+      expect(unfoldedCancellation).toContain('\r\nSEQUENCE:1\r\n');
+      expect(unfoldedCancellation).toContain('\r\nDTSTART:20300103T120000Z\r\n');
+      expect(unfoldedCancellation).toContain('\r\nDTEND:20300103T130000Z\r\n');
+      expect(unfoldedCancellation).toContain(`\r\n${organizerIdentity}\r\n`);
+      expect(unfoldedCancellation).not.toMatch(/\r\nATTENDEE:/);
+      expect(unfoldedCancellation).toContain('\r\nSTATUS:CANCELLED\r\n');
+      for (const line of [confirmationCalendar, cancellationCalendar].flatMap((calendar) => calendar.split('\r\n')).filter(Boolean)) {
+        expect(Buffer.byteLength(line, 'utf8')).toBeLessThanOrEqual(75);
+      }
+      expect(confirmationCalendar).not.toContain(booking.cancellationCredential);
+      expect(cancellationCalendar).not.toContain(booking.cancellationCredential);
     } finally { database.close(); }
   });
 
@@ -497,6 +546,23 @@ describe('Meeting Slot Booking API', () => {
       expect(clientConfirmation.text_body).toContain(booking.bookingId);
       expect(clientConfirmation.text_body).toContain(booking.cancellationCredential);
       expect(organizerConfirmation.text_body).not.toContain(booking.cancellationCredential);
+      const persistedAttachments = new Database(harness.databasePath, { readonly: true });
+      let confirmationAttachment: string;
+      try {
+        confirmationAttachment = (persistedAttachments.prepare(`SELECT attachments_json FROM notification_outbox WHERE event_id = ? AND recipient_email = 'client@example.com'`)
+          .get(`booking:${booking.bookingId}:confirmed`) as { attachments_json: string }).attachments_json;
+      } finally { persistedAttachments.close(); }
+      const parsedConfirmation = JSON.parse(confirmationAttachment) as Array<{ filename: string; content: string; contentType: string }>;
+      expect(parsedConfirmation[0].filename).toBe(`meeting-${booking.bookingId}.ics`);
+      expect(parsedConfirmation[0].contentType).toContain('text/calendar');
+      expect(parsedConfirmation[0].contentType).toBe('text/calendar; method=PUBLISH; charset=utf-8');
+      expect(parsedConfirmation[0].content).toContain('\r\nVERSION:2.0\r\n');
+      expect(parsedConfirmation[0].content).toContain('\r\nMETHOD:PUBLISH\r\n');
+      expect(parsedConfirmation[0].content).toContain(`UID:booking-${booking.bookingId}@meeting-booking.invalid\r\n`);
+      expect(parsedConfirmation[0].content).toContain('\r\nSEQUENCE:0\r\n');
+      expect(parsedConfirmation[0].content).toContain('\r\nDTSTART:20300103T120000Z\r\n');
+      expect(parsedConfirmation[0].content).toContain('\r\nDTEND:20300103T130000Z\r\n');
+      expect(parsedConfirmation[0].content).not.toContain(booking.cancellationCredential);
 
       const organizerBookings = await harness.app.inject({
         method: 'GET',
@@ -529,6 +595,18 @@ describe('Meeting Slot Booking API', () => {
         expect(subjects).toContain('Meeting booking confirmed');
         expect(subjects).toContain('Meeting booking cancelled');
       }
+      const deliveredConfirmation = delivered.find((message) => message.subject === 'Meeting booking confirmed' && message.to === 'client@example.com')!;
+      expect(deliveredConfirmation.attachments?.[0]).toEqual(parsedConfirmation[0]);
+      const deliveredCancellation = delivered.find((message) => message.subject === 'Meeting booking cancelled' && message.to === 'client@example.com')!;
+      const cancellationCalendar = deliveredCancellation.attachments?.[0].content ?? '';
+      expect(deliveredCancellation.attachments?.[0].contentType).toBe('text/calendar; method=CANCEL; charset=utf-8');
+      expect(cancellationCalendar).toContain(`UID:booking-${booking.bookingId}@meeting-booking.invalid\r\n`);
+      expect(cancellationCalendar).toContain('\r\nSEQUENCE:1\r\n');
+      expect(cancellationCalendar).toContain('\r\nSTATUS:CANCELLED\r\n');
+      expect(cancellationCalendar).toContain('\r\nMETHOD:CANCEL\r\n');
+      expect(cancellationCalendar).toContain('ORGANIZER:mailto:organizer@example.com');
+      expect(cancellationCalendar).not.toContain('ATTENDEE:');
+      expect(cancellationCalendar).not.toContain(booking.cancellationCredential);
       expect(delivered.filter((message) => message.subject.startsWith('Meeting booking')).every((message) => message.text.includes('Europe/Paris'))).toBe(true);
       const sentCredentialRows = new Database(harness.databasePath, { readonly: true });
       try {
@@ -611,7 +689,7 @@ describe('Meeting Slot Booking API', () => {
         'Meeting booking confirmed',
         'Meeting booking cancelled',
       ]);
-      expect(database.pragma('user_version', { simple: true })).toBe(3);
+      expect(database.pragma('user_version', { simple: true })).toBe(4);
       expect((database.prepare(`SELECT contains_credentials FROM notification_outbox WHERE notification_id = 'z-confirmation'`).get() as { contains_credentials: number }).contains_credentials).toBe(0);
       expect((database.prepare(`SELECT text_body FROM notification_outbox WHERE notification_id = 'z-confirmation'`).get() as { text_body: string }).text_body)
         .toBe('The meeting has been confirmed.');

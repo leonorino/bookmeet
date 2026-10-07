@@ -97,7 +97,6 @@ export default function Home() {
     <main className="page-shell">
       <header className="site-header">
         <Link className="wordmark" to="/" aria-label={t("Meeting Booking home")}>
-          <span className="wordmark-icon" aria-hidden="true">M</span>
           <span>{t("Meeting Booking")}</span>
         </Link>
         <nav className="main-nav" aria-label={t("Main navigation")}>
@@ -204,10 +203,6 @@ export default function Home() {
           {manageError && <p className="notice notice-error" role="alert">{t(manageError)}</p>}
         </section>
       </section>
-
-      <footer className="site-footer">
-        <span>{t("Meeting Booking")}</span>
-      </footer>
     </main>
   );
 }

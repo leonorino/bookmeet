@@ -5,4 +5,5 @@ export default [
   route("manage/:organizerId", "routes/manage.tsx"),
   route("book/:organizerId", "routes/book.tsx"),
   route("cancel", "routes/cancel.tsx"),
+  route("privacy", "routes/privacy.tsx"),
 ] satisfies RouteConfig;

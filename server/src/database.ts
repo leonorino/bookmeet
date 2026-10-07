@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 export function openDatabase(databasePath: string): Database.Database {
   if (databasePath !== ':memory:') {
@@ -106,6 +106,11 @@ function migrate(database: Database.Database): void {
     if (currentVersion < 3) {
       database.exec(`ALTER TABLE notification_outbox ADD COLUMN contains_credentials INTEGER NOT NULL DEFAULT 0 CHECK (contains_credentials IN (0, 1));`);
       database.pragma('user_version = 3');
+    }
+
+    if (currentVersion < 4) {
+      database.exec(`ALTER TABLE notification_outbox ADD COLUMN attachments_json TEXT;`);
+      database.pragma('user_version = 4');
     }
   }).immediate();
 }
